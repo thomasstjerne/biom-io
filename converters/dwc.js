@@ -1,8 +1,11 @@
-const biom = require("./biom")
 const _ = require("lodash")
 const util = require("../util")
 const fs = require("fs");
+const parse = require("csv-parse");
+const transform = require("stream-transform");
+const {streamReader} = util;
 const DEFAULT_UNIT = "DNA sequence reads";
+const BASIS_OF_RECORD = "Material Sample";
 
 const writeMetaXml = async (occCore, dnaExt ) =>  await fs.promises.writeFile("../output/archive/meta.xml", util.metaXml(occCore, dnaExt))
 
@@ -22,7 +25,7 @@ const biomToDwc = async (biomData, termMapping) => {
     const relevantDnaTerms = [...sampleHeaders.filter(key => dnaTerms.has(sampleTerm(key))).map(key => dnaTerms.get(sampleTerm(key))),
         ...taxonHeaders.filter(key => dnaTerms.has(taxonTerm(key))).map(key => dnaTerms.get(taxonTerm(key))),
       ];
-    await writeMetaXml([...relevantOccTerms, occTerms.get('sampleSizeValue'), occTerms.get('sampleSizeUnit'), occTerms.get('organismQuantity'), occTerms.get('organismQuantityType'),],relevantDnaTerms)
+    await writeMetaXml([...relevantOccTerms, occTerms.get('sampleSizeValue'), occTerms.get('sampleSizeUnit'), occTerms.get('organismQuantity'), occTerms.get('organismQuantityType'), occTerms.get('basisOfRecord'), occTerms.get('eventID')],relevantDnaTerms)
      
     const occStream = fs.createWriteStream(`../output/archive/occurrence.txt`, {
         flags: "a",
@@ -40,7 +43,8 @@ const biomToDwc = async (biomData, termMapping) => {
                 // row = taxon, column = sample 
                 const row = biomData.rows[i];
                 const occurrenceId = `${c.id}:${row.id}`;
-                occStream.write(`${occurrenceId}\t${getDataForTermfromSample(c, relevantOccTerms)}\t${getDataForTermFromTaxon(row, relevantOccTerms)}\t${_.get(c, 'metadata.readCount','')}\t${DEFAULT_UNIT}\t${r}\t${DEFAULT_UNIT}\n`);
+                const sampleId = c.id;
+                occStream.write(`${occurrenceId}\t${getDataForTermfromSample(c, relevantOccTerms)}\t${getDataForTermFromTaxon(row, relevantOccTerms)}\t${_.get(c, 'metadata.readCount','')}\t${DEFAULT_UNIT}\t${r}\t${DEFAULT_UNIT}\t${BASIS_OF_RECORD}\t${sampleId}\n`);
                 dnaStream.write(`${occurrenceId}\t${getDataForTermfromSample(c, relevantDnaTerms)}\t${getDataForTermFromTaxon(row, relevantDnaTerms)}\n`);
             }
          })
@@ -48,40 +52,94 @@ const biomToDwc = async (biomData, termMapping) => {
 }
 
 
+const otuTableToDWC = async (otuTableFile, sampleFile, taxaFile, termMapping) => {
+    const reverseTaxonTerms = util.objectSwap(termMapping.taxa)
+    const reverseSampleTerms = util.objectSwap(termMapping.samples)
+    const taxonTerm = key => _.get(termMapping, `taxa.${key}`, key);
+    const sampleTerm = key =>  _.get(termMapping, `samples.${key}`, key);
+    const reverseSampleTerm = key => _.get(reverseSampleTerms, `${key}`, key);
+    const reverseTaxonTerm = key => _.get(reverseTaxonTerms, `${key}`, key);
+    const dnaTerms = await util.dwcTerms('dna_derived_data');
+    const occTerms = await util.dwcTerms('dwc_occurrence');
 
+    const samples = await streamReader.readMetaDataAsMap(sampleFile, _.get(termMapping, 'samples.id', 'id'));
+    const taxa = await streamReader.readMetaDataAsMap(taxaFile, _.get(termMapping, 'taxa.id', 'id'));
+    console.log(`Taxa: ${taxa.size}`)
+    console.log(`Samples: ${samples.size}`)
+    
+    const taxonHeaders = Object.keys(taxa.entries().next().value[1]);
+    console.log(taxonHeaders)
+    const sampleHeaders = Object.keys(samples.entries().next().value[1]);
+    console.log(sampleHeaders)
+    const relevantOccTerms  = [...sampleHeaders.filter(key => occTerms.has(sampleTerm(key))).map(key => occTerms.get(sampleTerm(key))),
+        ...taxonHeaders.filter(key => occTerms.has(taxonTerm(key))).map(key => occTerms.get(taxonTerm(key)))];
+    const relevantDnaTerms = [...sampleHeaders.filter(key => dnaTerms.has(sampleTerm(key))).map(key => dnaTerms.get(sampleTerm(key))),
+        ...taxonHeaders.filter(key => dnaTerms.has(taxonTerm(key))).map(key => dnaTerms.get(taxonTerm(key))),
+      ];
+    await writeMetaXml([...relevantOccTerms, occTerms.get('sampleSizeValue'), occTerms.get('sampleSizeUnit'), occTerms.get('organismQuantity'), occTerms.get('organismQuantityType'),],relevantDnaTerms)
 
-const test = async () => {
-    const termMapping = {
-        'taxa': {
-            'sequence': 'DNA_sequence',
-            'species': 'scientificName'
-        },
-        'samples': {
-            'id': 'eventID',
-            'site_name': 'locality',
-            'marker': 'target_gene'
+   
+    const occStream = fs.createWriteStream(`../output/archive/occurrence.txt`, {
+        flags: "a",
+      });
+    const dnaStream = fs.createWriteStream(`../output/archive/dna.txt`, {
+        flags: "a",
+      });
+    const getDataForTermfromSample = (sample, terms) => terms.filter(term => !!sample[reverseSampleTerm(term.name)]).map(term => sample[reverseSampleTerm(term.name)] || "").join("\t");
+    const getDataForTermFromTaxon = (taxon, terms) => terms.filter(term => !!taxon[reverseTaxonTerm(term.name)]).map(term => taxon[reverseTaxonTerm(term.name)] || "").join("\t");
+    let sampleIdToArrayIndex;
+    let count = 0;
+    const transformer = transform((record, callback) => {
+        if(!sampleIdToArrayIndex){
+            sampleIdToArrayIndex = record;
+            callback(null, '');
+        } else {
+            let taxon = taxa.get(record[0])
+            let occurrences = "";
+            for (let index = 1; index < record.length; index++) {
+                // count is not 0 or undefined
+                if(!isNaN(Number(record[index])) && Number(record[index]) > 0){
+                    const sample = samples.get(sampleIdToArrayIndex[index]);
+                    const occurrenceId = `${sample[_.get(termMapping, 'samples.id', 'id')]}:${taxon[_.get(termMapping, 'taxa.id', 'id')]}`;
+                    const sampleId = sample[_.get(termMapping, 'samples.id', 'id')];
+                    occurrences += `${occurrenceId}\t${getDataForTermfromSample(sample, relevantOccTerms)}\t${getDataForTermFromTaxon(taxon, relevantOccTerms)}\t${_.get(sample, 'readCount','')}\t${DEFAULT_UNIT}\t${record[index]}\t${DEFAULT_UNIT}\t${BASIS_OF_RECORD}\t${sampleId}\n`;
+                    dnaStream.write(`${occurrenceId}\t${getDataForTermfromSample(sample, relevantDnaTerms)}\t${getDataForTermFromTaxon(taxon, relevantDnaTerms)}\n`);
+
+                }
+                
+            }
+
+            callback(null, occurrences);
+
+        }
+        count ++;
+        if(count % 1000 === 0){
+          console.log(count + " rows read")
+          
         } 
-    }
-    try {
-        let biomData = await biom.toBiom(`../input/biowide/OTU_table.tsv`,`../input/biowide/sample.tsv`,`../input/biowide/taxa.tsv`);
+                   
+      }, {
+        parallel: 5
+      });
+    const parser = parse( {
+        delimiter: "\t",
+        columns: false,
+        ltrim: true,
+        rtrim: true,
+        quote: null
+      })
 
+    const inputStream = fs.createReadStream(otuTableFile);    
+    inputStream.pipe(parser).pipe(transformer).pipe(occStream)
+    inputStream.on('end', function(){
+        console.log("Stream finished")
+        inputStream.close()
+        
+    })
 
-        biomToDwc(biomData, termMapping);
+} 
 
-       /*   console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV001"))
-        console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV002"))
-        console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV003"))
-        console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV004")) 
-       // console.log(biom.getDataRow("39efbae3f448393c8795c2ee920ab1041e947c37"))
-       console.log(biom.getDataColumn('NV004').reduce((partialSum, a) => partialSum + Number(a), 0));
-       console.log(biom.columns.find(c => c.id === 'NV004').metadata.readCount) */
-
-
-
-  
-    } catch (error) {
-        console.log(error)
-    }
+module.exports = {
+    biomToDwc,
+    otuTableToDWC
 }
-
-test()

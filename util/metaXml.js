@@ -11,6 +11,7 @@ xmlns="http://rs.tdwg.org/dwc/text/" metadata="eml.xml">
         <location>occurrence.txt</location>
     </files>
     <id index="0" />
+    <field index="0" term="http://rs.tdwg.org/dwc/terms/occurrenceID"/>
     ${coreTerms}
 </core>
 
