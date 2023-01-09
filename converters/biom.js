@@ -1,7 +1,6 @@
-const _ = require('lodash');
+const fs = require('fs');
 const streamReader = require('../util').streamReader;
 const Biom = require('biojs-io-biom').Biom;
-
 
 const getMetaDataRow = row => ({id: row.id, metadata: row})
 const getReadCount = (biom, column) => biom.getDataColumn(column).reduce((partialSum, a) => partialSum + Number(a), 0);
@@ -18,25 +17,73 @@ const addReadCounts = async biom => {
         }
     })
 }
+
+// converts an otu table with sample and taxon metada files to BIOM format
 const toBiom = async (otuTableFile, sampleFile, taxaFile) => {
 
   const samples = await streamReader.readMetaDataAsMap(sampleFile)
   const taxa = await streamReader.readMetaDataAsMap(taxaFile)
   console.log(`Taxa: ${taxa.size} samples: ${samples.size}`)  
   const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile);
-const biom = new Biom({
+  const biom = new Biom({
     rows: rows.map(r => getMetaDataRow(taxa.get(r))), // taxa.map(getMetaDataRow),
     columns: columns.map(c => getMetaDataRow(samples.get(c))),
     matrix_type: 'sparse',
     shape: [taxa.size, samples.size],
     data: otuTable
-})
+  })
 
-return biom;
+ return biom;
 }
 
+const writeBigArraysInChunksToStream = (stream, arr, chunkSize) => {
+    const startArray = "[\n", endArray = "\n]";
+    stream.write(startArray)
+    for (let i = 0; i < arr.length; i += chunkSize) {
+        const chunk = arr.slice(i, i + chunkSize);
+        stream.write(chunk.map(s => JSON.stringify(s)).join(','));
+        if(i+chunkSize < arr.length){
+            stream.write(',')
+        } else {
+            stream.write(endArray)
+        }
+    }
+    
+}
+
+const writeBiom = async (biom, path) => {
+    const startJson = "{\n", endJson = "\n}";
+    return new Promise((resolve, reject)=>{
+        try {
+            const biomStream = fs.createWriteStream(path, {
+                flags: "a",
+              });
+              biomStream.write(startJson);
+              console.log(Object.keys(biom))
+              const keys = Object.keys(biom);
+              keys.filter(k => !['_rows','_columns','_data'].includes(k)).forEach(k => {
+                biomStream.write(`"${k.slice(1)}": ${JSON.stringify(biom[k])},\n`)
+              })
+              biomStream.write(`"columns":`);
+              writeBigArraysInChunksToStream(biomStream, biom._columns, 100)
+              biomStream.write(`,"rows":`);
+              writeBigArraysInChunksToStream(biomStream, biom._rows, 100);
+              biomStream.write(`,"data":`);
+              writeBigArraysInChunksToStream(biomStream, biom._data, 1000)
+              biomStream.write(endJson);
+              resolve()
+              //biomStream.write(JSON.stringify(biom, null, 2)) 
+             
+        } catch (error) {
+            reject(error)
+        }
+        
+    })
+     
+}
 
 module.exports = {
     toBiom,
-    addReadCounts
+    addReadCounts,
+    writeBiom
 }

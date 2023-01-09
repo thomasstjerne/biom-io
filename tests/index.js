@@ -1,5 +1,7 @@
 const {toBiom} = require('../converters/biom');
 const {addReadCounts} = require('../converters/biom');
+const {writeBiom} = require('../converters/biom');
+
 const {otuTableToDWC} = require('../converters/dwc')
 const {biomToDwc} = require('../converters/dwc')
 
@@ -25,6 +27,7 @@ const termMappingGlobalSoil = {
         'latitude': 'decimalLatitude',
         'longitude': 'decimalLongitude',
         'biome': 'env_broad_scale',
+        'area': 'location'
     } 
 }
 
@@ -60,29 +63,25 @@ const testGlobalSoilToBiom = async () => {
     }
 }
 
-const testBiowideToBiom = async () => {
+const testBiowideToBiom = async (version = "") => {
     console.log("Reading eDNA Fungi dataset to Biom")
 
     try {
         console.time('toBiom');
-       let biom = await toBiom(`../input/biowide_fungi/OTU_table.tsv`,`../input/biowide_fungi/sample.tsv`,`../input/biowide_fungi/taxa.tsv`);
+       let biom = await toBiom(`../input/biowide_fungi${version}/OTU_table.tsv`,`../input/biowide_fungi${version}/sample.tsv`,`../input/biowide_fungi${version}/taxa.tsv`);
        console.timeEnd('toBiom');
         console.time('addReadCounts')
         await addReadCounts(biom)
         console.timeEnd('addReadCounts');
 
-         console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV001"))
+        /*  console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV001"))
         console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV002"))
         console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV003"))
         console.log(biom.getDataAt("39efbae3f448393c8795c2ee920ab1041e947c37", "NV004")) 
 
-        console.log(biom.getDataAt("0445a4bfdacacee7d17d933aa2c29ee32847bf62", "NV001")) 
-       // 0445a4bfdacacee7d17d933aa2c29ee32847bf62
-       // console.log(biom.getDataRow("39efbae3f448393c8795c2ee920ab1041e947c37"))
-       //console.log(biom.getDataColumn('G3557').reduce((partialSum, a) => partialSum + Number(a), 0));
-       //console.log(biom.columns.find(c => c.id === 'NV004').metadata.readCount)
+        console.log(biom.getDataAt("0445a4bfdacacee7d17d933aa2c29ee32847bf62", "NV001"))  */
 
-
+        await writeBiom(biom, `../output/archive/biowide.biom.json`)
         return biom;
   
     } catch (error) {
@@ -115,11 +114,11 @@ const globalSoilOtuTableToDwc = async () => {
 }
 
 
-const biowideOtuTableToDwc = async () => {
+const biowideOtuTableToDwc = async (version = "") => {
     
 
     try {
-        otuTableToDWC(`../input/biowide_fungi/OTU_table.tsv`,`../input/biowide_fungi/sample.tsv`,`../input/biowide_fungi/taxa.tsv`, termMappingBiowide);
+        otuTableToDWC(`../input/biowide_fungi${version}/OTU_table.tsv`,`../input/biowide_fungi${version}/sample.tsv`,`../input/biowide_fungi${version}/taxa.tsv`, termMappingBiowide);
 
   
     } catch (error) {
@@ -127,14 +126,22 @@ const biowideOtuTableToDwc = async () => {
     }
 }
 
-const biowideToBiomToDwc = async () =>{
+const biowideToBiomToDwc = async (version = "") =>{
 
-    const biom = await testBiowideToBiom()
+    const biom = await testBiowideToBiom(version)
     console.time('toDwc');
     await biomToDwc(biom, termMappingBiowide)
     console.timeEnd('toDwc');
 }
 
+const globalSoilToBiomToDwc = async () =>{
+
+    const biom = await testGlobalSoilToBiom()
+    console.time('toDwc');
+    await biomToDwc(biom, termMappingGlobalSoil)
+    console.timeEnd('toDwc');
+}
 
 
-biowideToBiomToDwc()
+
+biowideToBiomToDwc('_min')
