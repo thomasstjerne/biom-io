@@ -1,4 +1,4 @@
-module.exports = (occCore, dnaExt) => {
+export default (occCore, dnaExt) => {
 const coreTerms = occCore.map((term, idx) => `<field index="${idx+1}" term="${term.qualName}"/>`).join(`
 `);
 const dnaTerms = dnaExt.map((term, idx) => `<field index="${idx+1}" term="${term.qualName}"/>`).join(`

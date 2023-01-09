@@ -2,8 +2,10 @@
     "dependencies": {
         "biojs-io-biom": "^1.0.9",
         "csv-parse": "^4.3.4",
+        "h5wasm": "^0.4.9",
         "lodash": "^4.17.21",
         "stream-transform": "^1.0.8",
         "xml2js": "^0.4.23"
-    }
+    },
+    "type": "module"
 }

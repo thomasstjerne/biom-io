@@ -1,6 +1,11 @@
-const fs = require('fs');
+/* const fs = require('fs');
 const parseString = require('xml2js').parseString;
-const _ = require('lodash')
+const _ = require('lodash') */
+import fs from 'fs';
+import _ from 'lodash';
+import {parseString} from 'xml2js'
+
+
 const getTerms = async (schema) => {
 
   const fileList = await fs.promises.readdir(`../schemas`);
@@ -24,5 +29,6 @@ const getTerms = async (schema) => {
 //  console.log(xmlFile)
 }
 
-module.exports = getTerms;
+// module.exports = getTerms;
+export default getTerms;
 //getTerms('dwc_occurrence').then(json => console.log(json))

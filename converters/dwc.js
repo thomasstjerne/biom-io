@@ -1,15 +1,22 @@
-const _ = require("lodash")
+/* const _ = require("lodash")
 const util = require("../util")
 const fs = require("fs");
 const parse = require("csv-parse");
 const transform = require("stream-transform");
+const {streamReader} = util; */
+import _ from 'lodash';
+import fs from 'fs';
+import parse from 'csv-parse';
+import transform from "stream-transform";
+import util from "../util/index.js"
 const {streamReader} = util;
+
 const DEFAULT_UNIT = "DNA sequence reads";
 const BASIS_OF_RECORD = "Material Sample";
 
 const writeMetaXml = async (occCore, dnaExt ) =>  await fs.promises.writeFile("../output/archive/meta.xml", util.metaXml(occCore, dnaExt))
 
-const biomToDwc = async (biomData, termMapping) => {
+export const biomToDwc = async (biomData, termMapping) => {
     const reverseTaxonTerms = util.objectSwap(termMapping.taxa)
     const reverseSampleTerms = util.objectSwap(termMapping.samples)
     const taxonTerm = key => _.get(termMapping, `taxa.${key}`, key);
@@ -52,7 +59,7 @@ const biomToDwc = async (biomData, termMapping) => {
 }
 
 
-const otuTableToDWC = async (otuTableFile, sampleFile, taxaFile, termMapping) => {
+export const otuTableToDWC = async (otuTableFile, sampleFile, taxaFile, termMapping) => {
     const reverseTaxonTerms = util.objectSwap(termMapping.taxa)
     const reverseSampleTerms = util.objectSwap(termMapping.samples)
     const taxonTerm = key => _.get(termMapping, `taxa.${key}`, key);
@@ -139,7 +146,7 @@ const otuTableToDWC = async (otuTableFile, sampleFile, taxaFile, termMapping) =>
 
 } 
 
-module.exports = {
+export default {
     biomToDwc,
     otuTableToDWC
-}
+} 

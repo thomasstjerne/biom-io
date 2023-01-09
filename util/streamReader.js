@@ -1,7 +1,9 @@
-const fs = require("fs");
-const parse = require("csv-parse");
+/* const fs = require("fs");
+const parse = require("csv-parse"); */
+import fs from 'fs';
+import parse from 'csv-parse';
 
-const readOtuTable = (path) => {
+export const readOtuTable = (path) => {
     return new Promise((resolve, reject) => {
         const parser = parse( {
             delimiter: "\t",
@@ -38,7 +40,7 @@ const readOtuTable = (path) => {
 
 }
 
-const readOtuTableToSparse = (path) => {
+export const readOtuTableToSparse = (path) => {
   return new Promise((resolve, reject) => {
       const parser = parse( {
           delimiter: "\t",
@@ -91,7 +93,7 @@ const readOtuTableToSparse = (path) => {
 
 }
 
-const readMetaData = (path) => {
+export const readMetaData = (path) => {
     
       return new Promise((resolve, reject) => {
         const parser = parse({
@@ -127,7 +129,7 @@ const readMetaData = (path) => {
     })
 }
 
-const readMetaDataAsMap = (path, idHeader = 'id') => {
+export const readMetaDataAsMap = (path, idHeader = 'id') => {
     return new Promise((resolve, reject) => {
       const parser = parse({
           delimiter: "\t",
@@ -159,12 +161,19 @@ const readMetaDataAsMap = (path, idHeader = 'id') => {
   })
 }
 
-module.exports = {
+export default {
+  readOtuTable,
+  readOtuTableToSparse,
+  readMetaData,
+  readMetaDataAsMap
+}
+
+/* module.exports = {
     readOtuTable,
     readOtuTableToSparse,
     readMetaData,
     readMetaDataAsMap
-}
+} */
 
 /* const test = () => {
    // readMetaData('../input/biowide/sample.tsv')

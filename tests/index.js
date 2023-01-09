@@ -1,9 +1,6 @@
-const {toBiom} = require('../converters/biom');
-const {addReadCounts} = require('../converters/biom');
-const {writeBiom} = require('../converters/biom');
-
-const {otuTableToDWC} = require('../converters/dwc')
-const {biomToDwc} = require('../converters/dwc')
+import {toBiom, addReadCounts, writeBiom } from '../converters/biom.js';
+import {biomToDwc, otuTableToDWC} from '../converters/dwc.js';
+import {writeHDF5} from '../converters/hdf5.js';
 
 const termMappingBiowide = {
     'taxa': {
@@ -34,7 +31,6 @@ const termMappingGlobalSoil = {
 const testGlobalSoilToBiom = async () => {
     console.log("Reading Global Soil dataset to Biom")
     try {
-       // let biom = await toBiom(`../input/biowide/OTU_table.tsv`,`../input/biowide/sample.tsv`,`../input/biowide/taxa.tsv`);
        console.time('toBiom');
 
        let biom = await toBiom(`../input/global_soil/OTU_table.txt`,`../input/global_soil/samples.txt`,`../input/global_soil/taxa.txt`);
@@ -82,6 +78,7 @@ const testBiowideToBiom = async (version = "") => {
         console.log(biom.getDataAt("0445a4bfdacacee7d17d933aa2c29ee32847bf62", "NV001"))  */
 
         await writeBiom(biom, `../output/archive/biowide.biom.json`)
+        await writeHDF5(biom, `../output/archive/biowide.biom.h5`)
         return biom;
   
     } catch (error) {

@@ -1,12 +1,14 @@
-const fs = require('fs');
+/* const fs = require('fs');
 const streamReader = require('../util').streamReader;
-const Biom = require('biojs-io-biom').Biom;
-
+const Biom = require('biojs-io-biom').Biom; */
+import {streamReader} from '../util/index.js'
+import fs from 'fs';
+import {Biom} from 'biojs-io-biom';
 const getMetaDataRow = row => ({id: row.id, metadata: row})
 const getReadCount = (biom, column) => biom.getDataColumn(column).reduce((partialSum, a) => partialSum + Number(a), 0);
 
 // Calculate total reads in sample and set in metadata
-const addReadCounts = async biom => {
+export const addReadCounts = async biom => {
     return new Promise((resolve, reject) => {
         try {
             const readCounts = biom.columns.map(c => getReadCount(biom, c.id));
@@ -19,7 +21,7 @@ const addReadCounts = async biom => {
 }
 
 // converts an otu table with sample and taxon metada files to BIOM format
-const toBiom = async (otuTableFile, sampleFile, taxaFile) => {
+export const toBiom = async (otuTableFile, sampleFile, taxaFile) => {
 
   const samples = await streamReader.readMetaDataAsMap(sampleFile)
   const taxa = await streamReader.readMetaDataAsMap(taxaFile)
@@ -51,7 +53,7 @@ const writeBigArraysInChunksToStream = (stream, arr, chunkSize) => {
     
 }
 
-const writeBiom = async (biom, path) => {
+export const writeBiom = async (biom, path) => {
     const startJson = "{\n", endJson = "\n}";
     return new Promise((resolve, reject)=>{
         try {
@@ -82,8 +84,8 @@ const writeBiom = async (biom, path) => {
      
 }
 
-module.exports = {
+export default {
     toBiom,
     addReadCounts,
     writeBiom
-}
+} 
