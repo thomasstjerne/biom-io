@@ -1,7 +1,15 @@
 import {Biom} from 'biojs-io-biom';
 import fs from 'fs'
 import _ from 'lodash'
-const generatedByString = "Node BIOM converter";
+let h5wasm;
+const generatedByString = "GBIF eDNA Tool";
+
+
+const init = async () => {
+    h5wasm = await import("h5wasm");
+}
+
+init();
 
 const getIndptr = (sparseMatrix, idx, size) => {
     // idx 0 for rows, 1 for columns
@@ -31,6 +39,7 @@ const getTypeAndValues = (arr, attr) => {
     const values = arr.map(elm => {
         const data = _.get(elm, attr)
         if(_.isArray(data)){
+            // haven´t figured out how to create array datatypes in h5wasm so far
             type = "S";
             let str = data.toString()
             if(str.length > length){
@@ -43,8 +52,14 @@ const getTypeAndValues = (arr, attr) => {
             }
         } else if(type !== 'S' && typeof data === 'number'){
             type = 'f'
+        } else {
+            // console.log('H5 type guesser '+attr+ ' '+ typeof data)
+            if(_.isUndefined(data) ){
+                type = 'S';
+                length = 1;
+            }
         }
-        return data
+        return _.isUndefined(data) ? "" : data;
     })
         
     
@@ -60,7 +75,7 @@ export const writeHDF5 = async (biom, hdf5file) => {
    
   // const biom = await Biom.parse(jsonString, {});
   // console.log(biom.shape);
-   const h5wasm = await import("h5wasm");
+   // const h5wasm = await import("h5wasm");
     await h5wasm.ready;
     let columnOrientedSparseMatrix = [...biom.data].sort((a,b) => {
     return a[1] - b[1]
@@ -148,7 +163,7 @@ try {
 
 // returns a Biom object
 export const readHDF5 = async (hdf5file) => {
-    const h5wasm = await import("h5wasm");
+   // const h5wasm = await import("h5wasm");
     await h5wasm.ready;
     
     let f = new h5wasm.File(hdf5file/* "rich_sparse_otu_table_hdf5.biom" */, "r");
@@ -232,5 +247,5 @@ export const readHDF5 = async (hdf5file) => {
         console.log(error)
     } 
       
-    
     }
+

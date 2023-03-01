@@ -1,6 +1,10 @@
 import {toBiom, addReadCounts, writeBiom } from '../converters/biom.js';
 import {biomToDwc, otuTableToDWC} from '../converters/dwc.js';
+import {processWorkBookFromFile} from '../converters/excel.js'
 import {writeHDF5} from '../converters/hdf5.js';
+import * as url from 'url';
+
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 const termMappingBiowide = {
     'taxa': {
@@ -33,7 +37,7 @@ const testGlobalSoilToBiom = async () => {
     try {
        console.time('toBiom');
 
-       let biom = await toBiom(`../input/global_soil/OTU_table.txt`,`../input/global_soil/samples.txt`,`../input/global_soil/taxa.txt`);
+       let biom = await toBiom(`../testData/global_soil/OTU_table.txt`,`../testData/global_soil/samples.txt`,`../testData/global_soil/taxa.txt`);
        console.timeEnd('toBiom');
        console.time('addReadCounts')
        await addReadCounts(biom)
@@ -64,7 +68,7 @@ const testBiowideToBiom = async (version = "") => {
 
     try {
         console.time('toBiom');
-       let biom = await toBiom(`../input/biowide_fungi${version}/OTU_table.tsv`,`../input/biowide_fungi${version}/sample.tsv`,`../input/biowide_fungi${version}/taxa.tsv`);
+       let biom = await toBiom(`../testData/biowide_fungi${version}/OTU_table.tsv`,`../testData/biowide_fungi${version}/sample.tsv`,`../testData/biowide_fungi${version}/taxa.tsv`);
        console.timeEnd('toBiom');
         console.time('addReadCounts')
         await addReadCounts(biom)
@@ -101,8 +105,8 @@ const simpleTest = () => {
 const globalSoilOtuTableToDwc = async () => {
     
     try {
-      //  otuTableToDWC(`../input/biowide_fungi/OTU_table.tsv`,`../input/biowide_fungi/sample.tsv`,`../input/biowide_fungi/taxa.tsv`, termMappingBiowide);
-      otuTableToDWC(`../input/global_soil/OTU_table.txt`,`../input/global_soil/samples.txt`,`../input/global_soil/taxa.txt`, termMappingGlobalSoil);
+      //  otuTableToDWC(`../testData/biowide_fungi/OTU_table.tsv`,`../testData/biowide_fungi/sample.tsv`,`../testData/biowide_fungi/taxa.tsv`, termMappingBiowide);
+      otuTableToDWC(`../testData/global_soil/OTU_table.txt`,`../testData/global_soil/samples.txt`,`../testData/global_soil/taxa.txt`, termMappingGlobalSoil);
 
   
     } catch (error) {
@@ -115,7 +119,7 @@ const biowideOtuTableToDwc = async (version = "") => {
     
 
     try {
-        otuTableToDWC(`../input/biowide_fungi${version}/OTU_table.tsv`,`../input/biowide_fungi${version}/sample.tsv`,`../input/biowide_fungi${version}/taxa.tsv`, termMappingBiowide);
+        otuTableToDWC(`../testData/biowide_fungi${version}/OTU_table.tsv`,`../testData/biowide_fungi${version}/sample.tsv`,`../testData/biowide_fungi${version}/taxa.tsv`, termMappingBiowide);
 
   
     } catch (error) {
@@ -139,6 +143,9 @@ const globalSoilToBiomToDwc = async () =>{
     console.timeEnd('toDwc');
 }
 
+const testExcel = () => {
+    processWorkBookFromFile(__dirname +`../testData/danish_reefs/Data Sheet 1/Danish_Reefs_eDNA_gen.xlsx`)
+}
 
-
-biowideToBiomToDwc('_min')
+//biowideToBiomToDwc('_min')
+testExcel()

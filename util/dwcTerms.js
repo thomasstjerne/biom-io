@@ -1,3 +1,8 @@
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /* const fs = require('fs');
 const parseString = require('xml2js').parseString;
 const _ = require('lodash') */
@@ -8,14 +13,16 @@ import {parseString} from 'xml2js'
 
 const getTerms = async (schema) => {
 
-  const fileList = await fs.promises.readdir(`../schemas`);
+  try {
+  const fileList = await fs.promises.readdir(`${__dirname}/../schemas`);
   const xmlFile = fileList.find((file) => file.startsWith(schema));
-  const xml = await fs.promises.readFile(`../schemas/${xmlFile}`);
+  const xml = await fs.promises.readFile(`${__dirname}/../schemas/${xmlFile}`);
   return new Promise((resolve, reject) => {
     parseString(xml, { trim: true }, (error, data) => {
         if (error) {
           console.log("Error parsing XML");
           console.log(error);
+          console.log("ERROR in getTERMS "+__dirname)
           reject(error);
         } else {
           
@@ -25,6 +32,11 @@ const getTerms = async (schema) => {
         }
       });
   })
+  } catch (error) {
+    console.log("ERROR in getTERMS "+__dirname)
+    console.log(error)
+  }
+  
   
 //  console.log(xmlFile)
 }

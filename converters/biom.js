@@ -1,6 +1,3 @@
-/* const fs = require('fs');
-const streamReader = require('../util').streamReader;
-const Biom = require('biojs-io-biom').Biom; */
 import {streamReader} from '../util/index.js'
 import fs from 'fs';
 import {Biom} from 'biojs-io-biom';
@@ -21,20 +18,26 @@ export const addReadCounts = async biom => {
 }
 
 // converts an otu table with sample and taxon metada files to BIOM format
-export const toBiom = async (otuTableFile, sampleFile, taxaFile) => {
-
-  const samples = await streamReader.readMetaDataAsMap(sampleFile)
-  const taxa = await streamReader.readMetaDataAsMap(taxaFile)
+export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumns = true, processFn = (progress, total, message, summary) => {}) => {
+  processFn(0, 0, 'reading sample file')
+  const samples = await streamReader.readMetaDataAsMap(sampleFile, undefined, processFn)
+   processFn(0, 0, 'reading taxon file', {sampleCount: samples.size});
+  const taxa = await streamReader.readMetaDataAsMap(taxaFile, undefined, processFn)
   console.log(`Taxa: ${taxa.size} samples: ${samples.size}`)  
-  const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile);
+  processFn(0, taxa.size, 'reading OTU table', {taxonCount: taxa.size});
+  const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn);
   const biom = new Biom({
-    rows: rows.map(r => getMetaDataRow(taxa.get(r))), // taxa.map(getMetaDataRow),
-    columns: columns.map(c => getMetaDataRow(samples.get(c))),
+    rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
+    columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),
     matrix_type: 'sparse',
-    shape: [taxa.size, samples.size],
+    shape: samplesAsColumns ? [taxa.size, samples.size] : [samples.size, taxa.size],
     data: otuTable
   })
 
+  if(!samplesAsColumns){
+    // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
+    biom.transpose()
+  }
  return biom;
 }
 
