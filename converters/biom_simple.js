@@ -1,4 +1,4 @@
-// This is simply the biom converter without the processFn used to report progress. For command line purpuses it will be nice to have a "clean" converter
+// This is simply the biom converter without the processFn used to report progress. For command line purposes it will be nice to have a "clean" converter
 import {streamReader} from '../util/index.js'
 import fs from 'fs';
 import {Biom} from 'biojs-io-biom';
@@ -34,7 +34,7 @@ export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumn
   })
 
   if(!samplesAsColumns){
-    // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
+    // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will always have a smaller cardinality)
     biom.transpose()
   }
  return biom;

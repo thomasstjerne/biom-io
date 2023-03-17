@@ -28,16 +28,16 @@ export default (app) => {
                   if(filePaths?.taxa){
                     result.taxonHeaders = await readTsvHeaders(filePaths?.taxa)
                   }
-                  res.json(result) 
+                  res.json({...result, id: req.params.id}) 
                 } else if(files.format === 'XLSX') {
                 //  const biom = await processWorkBookFromFile(req.params.id, files.files[0].name, version)
                  // res.json(biom)
-                 res.json({...files}) 
+                 res.json({...files, id: req.params.id}) 
                 } else if(files.format === 'ZIP') {
                   await unzip(req.params.id, files.files[0].name)
-                  res.json(files)
+                  res.json({...files, id: req.params.id})
                 } else {
-                  res.json(files)
+                  res.json({...files, id: req.params.id})
                 } 
             } catch (error) {
                 console.log(error)

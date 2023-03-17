@@ -49,7 +49,7 @@ export const determineFileNames = async (id, version) => {
 
 }
 
-export const otuTableHasSamplesAsColumns = async files => {
+export const otuTableHasSamplesAsColumns = async (files, sampleIdTerm) => {
     console.log("hasSamplesAsColumns")
     try {
         const samples = await streamReader.readMetaData(files.samples); // readTsvHeaders(`${config.dataStorage}${id}/${version}/original/${files.samples}`);
@@ -57,7 +57,7 @@ export const otuTableHasSamplesAsColumns = async files => {
         const columns = new Set(otuTableColumns.slice(1));
         let sampleIdsNotInOtuTableColumns = 0;
         samples.forEach(s => {
-            if(!columns.has(s.id)){
+            if(!columns.has(s[sampleIdTerm])){
                 sampleIdsNotInOtuTableColumns ++;
             }
         })

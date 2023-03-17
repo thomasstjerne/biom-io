@@ -33,6 +33,26 @@ export const writeEmlJson = async (id, version, eml) => {
     await fs.promises.writeFile(`${config.dataStorage}${id}/${version}/eml.json`, JSON.stringify(eml, null, 2));
 }
 
+export const writeMapping = async (id, version, mapping) => {
+  await fs.promises.writeFile(`${config.dataStorage}${id}/${version}/mapping.json`, JSON.stringify(mapping, null, 2));
+}
+
+export const readMapping = async (id, version) => {
+  try {
+    let files = await fs.promises.readdir(`${config.dataStorage}${id}/${version}`)     
+     if(!!files.find(f => f === 'mapping.json')){
+        let data = await fs.promises.readFile(`${config.dataStorage}${id}/${version}/mapping.json`, 'utf8') //writeFile(`${config.dataStorage}${id}/${version}/processing.json`, JSON.stringify(json, null, 2));
+        return JSON.parse(data)
+     } else {
+        return null
+     }
+} catch (error) {
+    console.log(error)
+   return null;
+}
+  
+}
+
 export const writeEmlXml = async (id, version, xml) => {
 if (!fs.existsSync(`${config.dataStorage}${id}/${version}/archive`)) {
     await fs.promises.mkdir(`${config.dataStorage}${id}/${version}/archive`)
@@ -57,7 +77,7 @@ export const hasMetadata = async (id, version) => {
 export const getMetadata = async (id, version) => {
     try {
         let files = await fs.promises.readdir(`${config.dataStorage}${id}/${version}`)     
-         if(!!files.find(f => f === 'eml.json') && !!files.find(f => f === 'eml.xml')){
+         if(!!files.find(f => f === 'eml.json')){
             let data = await fs.promises.readFile(`${config.dataStorage}${id}/${version}/eml.json`, 'utf8') //writeFile(`${config.dataStorage}${id}/${version}/processing.json`, JSON.stringify(json, null, 2));
             return JSON.parse(data)
          } else {

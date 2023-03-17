@@ -11,6 +11,8 @@ import metadata from './eml.js';
 import processing from './process.js'
 import dwc from './dwc.js'
 import terms from './terms.js';
+import mapping from './mapping.js';
+
 import cors from 'cors'
 import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport } from '../util/filesAndDirectories.js'
 
@@ -50,6 +52,8 @@ processing(app)
 dwc(app)
 // add routes for terms
 terms(app)
+// add routes for term mapping
+mapping(app)
 
 app.get('/', (req, res) => {
     res.send('Hello World!')

@@ -2,6 +2,9 @@
 const parse = require("csv-parse"); */
 import fs from 'fs';
 import parse from 'csv-parse';
+
+const objectSwap = obj => Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]))
+
 // import streamReader from '../util/streamreader.js';
 
 export const readOtuTable = (path,  progressFn = ()=>{}) => {
@@ -41,7 +44,7 @@ export const readOtuTable = (path,  progressFn = ()=>{}) => {
 
 }
 
-export const readOtuTableToSparse = (path, progressFn = (progress, total, message, summary)=>{}) => {
+export const readOtuTableToSparse = (path, progressFn = (progress, total, message, summary)=>{}, columnIdTerm) => {
   return new Promise((resolve, reject) => {
       const parser = parse( {
           delimiter: "\t",
@@ -59,7 +62,7 @@ export const readOtuTableToSparse = (path, progressFn = (progress, total, messag
           let record;
           while ((record = parser.read()) !== null) {
             if(!colums){
-              colums = record.slice(1); // This is the header which gives the column order for the matrix
+              colums = record.slice(1).map(c => (c === columnIdTerm ? 'id' : c)); // This is the header which gives the column order for the matrix
             } else {
               record.slice(1).forEach((element, index) => {
                 if(!isNaN(Number(element)) && Number(element) > 0){
@@ -130,7 +133,27 @@ export const readMetaData = (path,  progressFn = ()=>{}) => {
     })
 }
 
-export const readMetaDataAsMap = (path, idHeader = 'id', progressFn = ()=>{}) => {
+export const readMetaDataAsMap = (path, /* idHeader = 'id', */ progressFn = ()=>{}, mapping = {}) => {
+
+  /**
+ * Use a mapping object to rename terms corresponding to DWC / MiXS
+ */
+const reverseMapping = objectSwap(mapping)
+
+const mapRecord = record => {
+  // return record;
+ return Object.keys(record).reduce((acc, key) => {
+      if(reverseMapping[key]){
+        // console.log(reverseMapping[key])
+        acc[reverseMapping[key]] = record[key]
+      } else {
+        acc[key] = record[key]
+      }
+    return acc;
+  }, {})
+}
+// End mapping utils
+
     return new Promise((resolve, reject) => {
       const parser = parse({
           delimiter: "\t",
@@ -145,8 +168,17 @@ export const readMetaDataAsMap = (path, idHeader = 'id', progressFn = ()=>{}) =>
           let record;
           while ((record = parser.read()) !== null) {
              // console.log(record)
+            // If mapping is used correct, an id should be guaranteed
+            const mappedRecord = mapRecord(record);
+            if(!mappedRecord?.id){
+              console.log("Mapped Record")
+              console.log(mappedRecord)
+              console.log("Record")
+              console.log(record)
+            }
             
-            records.set(record[idHeader], record)  //.push(record);
+
+            records.set(mappedRecord.id, mappedRecord)  
            count++;
             if(count % 1000 === 0){
               try {

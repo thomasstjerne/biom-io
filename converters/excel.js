@@ -3,6 +3,7 @@ import fs from "fs";
 import fileNames from "../validation/filenames.js";
 import {Biom} from 'biojs-io-biom';
 import config from '../config.js'
+import util from "../util/index.js"
 
 const determineFileNames = sheets => {
   console.log('determineFileNames')
@@ -49,7 +50,22 @@ const determineFileNames = sheets => {
 }
 
 
-const getMapFromMatrix = (matrix, idHeader) => {
+
+const getMapFromMatrix = (matrix, mapping) => {
+
+  const reverseMapping = util.objectSwap(mapping)
+
+const mapRecord = record => {
+  // return record;
+ return Object.keys(record).reduce((acc, key) => {
+      if(reverseMapping[key]){
+        acc[reverseMapping[key]] = record[key]
+      } else {
+        acc[key] = record[key]
+      }
+    return acc;
+  }, {})
+}
 
   const columns = matrix[0];
   const rows = matrix.slice(1);
@@ -61,13 +77,13 @@ const getMapFromMatrix = (matrix, idHeader) => {
       return acc
     }, {}) 
 
-   })
+   }).map(mapRecord)
 
-   return new Map(arr.filter(d => !!d[idHeader]).map(d => ([d[idHeader],  d])))
+   return new Map(arr.filter(d => !!d.id).map(d => ([d.id,  d])))
 }
 
 // converts an otu table with sample and taxon metada files to BIOM format
-export const toBiom = async (data, idHeader = 'ID') => {
+export const toBiom = async (data, termMapping) => {
 
   return new Promise((resolve, reject) => {
     try {
@@ -77,10 +93,8 @@ export const toBiom = async (data, idHeader = 'ID') => {
         taxa
     } = data;
     
-      //const sampleMap = new Map(samples.data.filter(d => !!d[idHeader]).map(d => ([d[idHeader],  d])))
-      const sampleMap = getMapFromMatrix(samples.data, idHeader)
-      //const taxaMap = new Map(taxa.data.filter(d => !!d[idHeader]).map(d => ([d[idHeader],  d])))
-      const taxaMap = getMapFromMatrix(taxa.data, idHeader, true)
+      const sampleMap = getMapFromMatrix(samples.data,  termMapping.samples)
+      const taxaMap = getMapFromMatrix(taxa.data, termMapping.taxa)
       const sparseData = [];
       let columns = otuTable.data[0].slice(1);
       let rows = [];
@@ -97,9 +111,8 @@ export const toBiom = async (data, idHeader = 'ID') => {
       })
       console.log(`Samples in metadata: ${samples.data.length} in OTU table: ${columns.length}`)
       console.log(`Taxa in metadata: ${taxa.data.length} in OTU table: ${rows.length}`)
-      // console.log(rows.map(r => ({id: r, metadata: taxaMap.get(r)})))
       const biom = new Biom({
-        rows: rows.map(r => ({id: r, metadata: taxaMap.get(r)})), // taxa.map(getMetaDataRow),
+        rows: rows.map(r => ({id: r, metadata: taxaMap.get(r)})), 
         columns: columns.map(c => ({id: c, metadata: sampleMap.get(c)})),
         matrix_type: 'sparse',
         shape: [taxaMap.size, sampleMap.size],
@@ -113,7 +126,7 @@ export const toBiom = async (data, idHeader = 'ID') => {
 
 }
 
-export const processWorkBookFromFile = async (id, fileName, version) => {
+export const processWorkBookFromFile = async (id, fileName, version, termMapping) => {
   return new Promise((resolve, reject) => {
     try {
       const stream = fs.createReadStream(`${config.dataStorage}${id}/${version}/original/${fileName}`);
@@ -138,7 +151,7 @@ export const processWorkBookFromFile = async (id, fileName, version) => {
 
         const data = workbook.SheetNames.map(n => ({name: n, data: xlsx.utils.sheet_to_json(workbook.Sheets[n], {header: 1})}));
         const mappedData = determineFileNames(data)
-        const biom = await toBiom(mappedData)
+        const biom = await toBiom(mappedData, termMapping)
         resolve(biom)
         }
       });

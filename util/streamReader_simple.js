@@ -1,4 +1,4 @@
-// This is simply the stream reader without the processFn used to report progress. For command line purpuses it will be nice to have a "clean" converter
+// This is simply the stream reader without the processFn used to report progress. For command line purposes it will be nice to have a "clean" converter
 
 import fs from 'fs';
 import parse from 'csv-parse';

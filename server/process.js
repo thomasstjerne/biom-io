@@ -2,8 +2,8 @@
 import * as url from 'url';
 import fs from 'fs';
 import config from '../config.js'
-
-import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport, getMetadata, readTsvHeaders } from '../util/filesAndDirectories.js'
+import _ from 'lodash'
+import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport, getMetadata, readTsvHeaders, readMapping } from '../util/filesAndDirectories.js'
 import { uploadedFilesAndTypes, unzip } from '../validation/files.js'
 import { determineFileNames, otuTableHasSamplesAsColumns, otuTableHasSequencesAsColumnHeaders } from '../validation/tsvformat.js'
 import { processWorkBookFromFile } from "../converters/excel.js"
@@ -52,11 +52,17 @@ const q = queue(async (options) => {
             }
             runningJobs.set(id, {...job});
         }
-
+        const mapping = await readMapping(id, version);
+        if(!mapping){
+            // should we just warn that no mapping was created? or should it throw?
+        } else {
+            job.mapping = mapping;
+        }
+        
         if (files.format.startsWith('TSV')) {
             console.log("Its some TSV format")
             const filePaths = await determineFileNames(id, version);
-            const samplesAsColumns = await otuTableHasSamplesAsColumns(filePaths);
+            const samplesAsColumns = await otuTableHasSamplesAsColumns(filePaths, _.get(mapping, 'samples.id', 'id'));
             let sequencesAsHeaders = false;
             if (!samplesAsColumns) {
                 sequencesAsHeaders = await otuTableHasSequencesAsColumnHeaders(filePaths)
@@ -73,21 +79,22 @@ const q = queue(async (options) => {
                 console.log("Its  TSV_3_FILE format")
                 job.steps.push({ status: 'processing', message: 'Converting to biom format', time: Date.now() })
                 runningJobs.set(id, {...job});
-                const biom = await toBiom(filePaths.otuTable, filePaths.samples, filePaths.taxa, samplesAsColumns, updateStatusOnCurrentStep)
+                console.log("It has samples as columns? "+samplesAsColumns)
+                const biom = await toBiom(filePaths.otuTable, filePaths.samples, filePaths.taxa, samplesAsColumns, updateStatusOnCurrentStep, mapping)
                 job.steps.push({ status: 'processing', message: 'Adding total read counts pr sample', time: Date.now() })      
                 runningJobs.set(id, {...job});
                 addReadCounts(biom)
                 
                 await writeBiomFormats(biom, id, version, job)
             } else if(files.format === 'TSV_2_FILE'){
-
+                // TODO 
             }
 
         } else if (files.format === 'XLSX') {
             console.log("Its XLSX format")
             job.steps.push({ status: 'processing', message: 'Converting to biom format', time: Date.now() })
             runningJobs.set(id, {...job});
-            const biom = await processWorkBookFromFile(id, files.files[0].name, version)
+            const biom = await processWorkBookFromFile(id, files.files[0].name, version, mapping)
             job.steps.push({ status: 'processing', message: 'Adding total read counts pr sample', time: Date.now() })      
             runningJobs.set(id, {...job});
             addReadCounts(biom)
@@ -102,7 +109,7 @@ const q = queue(async (options) => {
 
     } catch (error) {
         console.log("There was an error")
-       // console.log(error)
+        console.log(error)
        // throw error
         // callback(error)
     }

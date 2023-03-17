@@ -1,7 +1,18 @@
-import {streamReader} from '../util/index.js'
+import util, {streamReader} from '../util/index.js'
 import fs from 'fs';
 import {Biom} from 'biojs-io-biom';
-const getMetaDataRow = row => ({id: row.id, metadata: row})
+import _ from 'lodash'
+const getMetaDataRow = row => {
+    if(!row?.id){
+       // console.log(row)
+    }
+    try {
+        return {id: row.id, metadata: row}
+    } catch (error) {
+       // console.log(row)
+    }
+    
+    }
 const getReadCount = (biom, column) => biom.getDataColumn(column).reduce((partialSum, a) => partialSum + Number(a), 0);
 
 // Calculate total reads in sample and set in metadata
@@ -17,15 +28,24 @@ export const addReadCounts = async biom => {
     })
 }
 
+const getColumnIdTerm = (samplesAsColumns, termMapping) => {
+    console.log("samplesAsColumns "+samplesAsColumns)
+    console.log(`Term ${_.get(termMapping, 'samples.id')}`)
+    return samplesAsColumns ? _.get(termMapping, 'samples.id', 'id') :_.get(termMapping, 'taxa.id', 'id')
+}
+
 // converts an otu table with sample and taxon metada files to BIOM format
-export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumns = true, processFn = (progress, total, message, summary) => {}) => {
+export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumns = true, processFn = (progress, total, message, summary) => {}, termMapping = { taxa: {}, samples: {}}) => {
+
   processFn(0, 0, 'reading sample file')
-  const samples = await streamReader.readMetaDataAsMap(sampleFile, undefined, processFn)
+  const samples = await streamReader.readMetaDataAsMap(sampleFile, /* undefined, */ processFn, termMapping.samples)
    processFn(0, 0, 'reading taxon file', {sampleCount: samples.size});
-  const taxa = await streamReader.readMetaDataAsMap(taxaFile, undefined, processFn)
+  const taxa = await streamReader.readMetaDataAsMap(taxaFile, /* undefined, */ processFn, termMapping.taxa)
   console.log(`Taxa: ${taxa.size} samples: ${samples.size}`)  
   processFn(0, taxa.size, 'reading OTU table', {taxonCount: taxa.size});
-  const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn);
+  const columnIdTerm = getColumnIdTerm(samplesAsColumns, termMapping)
+  console.log("Column ID term: "+columnIdTerm)
+  const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn, columnIdTerm);
   const biom = new Biom({
     rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
     columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),

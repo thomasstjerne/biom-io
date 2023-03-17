@@ -88,8 +88,8 @@ export const otuTableToDWC = async (otuTableFile, sampleFile, taxaFile, termMapp
     const dnaTerms = await util.dwcTerms('dna_derived_data');
     const occTerms = await util.dwcTerms('dwc_occurrence');
 
-    const samples = await streamReader.readMetaDataAsMap(sampleFile, _.get(termMapping, 'samples.id', 'id'));
-    const taxa = await streamReader.readMetaDataAsMap(taxaFile, _.get(termMapping, 'taxa.id', 'id'));
+    const samples = await streamReader.readMetaDataAsMap(sampleFile/* , _.get(termMapping, 'samples.id', 'id') */, ()=>{}, _.get(termMapping, 'samples', {}));
+    const taxa = await streamReader.readMetaDataAsMap(taxaFile/* , _.get(termMapping, 'taxa.id', 'id') */, ()=>{}, _.get(termMapping, 'taxa', {}));
     console.log(`Taxa: ${taxa.size}`)
     console.log(`Samples: ${samples.size}`)
     
