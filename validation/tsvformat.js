@@ -27,19 +27,22 @@ export const determineFileNames = async (id, version) => {
         })
 
         console.log(`samples ${samples}`)
-        let taxa = fileList.length === 3 ? fileList.find(f => {
+        let taxa =  fileList.find(f => {
             let splitted = f.split('.')// ignore file extension
             let rawFileName = splitted.slice(0,-1).join('.').replace(/[^0-9a-z]/gi, '').toLowerCase();
             return filenames.taxa.indexOf(rawFileName) > -1;
-        }) : null;
+        });
 
         console.log(`taxa ${taxa}`)
-        let result = {
-            otuTable: `${config.dataStorage}${id}/${version}/original/${otutable}`,
-            samples: `${config.dataStorage}${id}/${version}/original/${samples}`
-        }
+        let result =  {};
         if(taxa){
             result.taxa = `${config.dataStorage}${id}/${version}/original/${taxa}`
+        }
+        if(otutable){
+            result.otuTable = `${config.dataStorage}${id}/${version}/original/${otutable}`
+        }
+        if(samples){
+            result.samples = `${config.dataStorage}${id}/${version}/original/${samples}`
         }
         return result;
     } catch (error) {
@@ -51,6 +54,11 @@ export const determineFileNames = async (id, version) => {
 
 export const otuTableHasSamplesAsColumns = async (files, sampleIdTerm) => {
     console.log("hasSamplesAsColumns")
+    if(!files.samples){
+        throw "No sample file"
+    } else if(!files.otuTable){
+        throw "No Otu table"
+    }
     try {
         const samples = await streamReader.readMetaData(files.samples); // readTsvHeaders(`${config.dataStorage}${id}/${version}/original/${files.samples}`);
         const otuTableColumns = await readTsvHeaders(files.otuTable);
@@ -73,7 +81,9 @@ export const otuTableHasSamplesAsColumns = async (files, sampleIdTerm) => {
 
 export const otuTableHasSequencesAsColumnHeaders = async files => {
     console.log("otuTableHasSequencesAsColumnHeaders")
-
+    if(!files.otuTable){
+        throw "No Otu table"
+    }
     try {
         const otuTableColumns = await readTsvHeaders(files.otuTable);
         const columns = otuTableColumns.slice(1);

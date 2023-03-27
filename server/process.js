@@ -12,6 +12,48 @@ import { writeHDF5 } from '../converters/hdf5.js'
 import queue from 'async/queue.js';
 const runningJobs = new Map();
 
+const STEPS = {
+    "validating": {
+        "name": "validating",
+        "status": "pending",
+        "message": "Validating files",
+        "messagePending": "Validate files"
+      },
+    "extractArchive": {
+        "name": "extractArchive",
+         "status": 'pending', 
+         "message": 'Extracting archive',
+         "messagePending": "Extract archive"
+    },
+    "convertToBiom": {
+        "name": "convertToBiom",
+        "status": "pending",
+        "message": 'Converting to BIOM format',
+        "messagePending": "Convert to BIOM format"
+      },
+      "addReadCounts": {
+        "name": "addReadCounts",
+        "status": "pending",
+        "message": "Adding total read counts pr sample",
+        "messagePending": "Add total read counts pr sample"
+      },
+      
+      "writeBiom1": {
+        "name": "writeBiom1",
+        "status": "pending",
+        "message": "Writing BIOM 1.0",
+        "messagePending": "Write BIOM 1.0"
+      },
+      "writeBiom2": {
+        "name": "writeBiom2",
+        "status": "pending",
+        "message": "Writing BIOM 2.1",
+        "messagePending": "Write BIOM 2.1"
+      }
+}
+
+
+
 
 const q = queue(async (options) => {
     const id = options?.id;
@@ -22,21 +64,23 @@ const q = queue(async (options) => {
       //  let job = runningJobs.get(id);
         job.version = version;
         job.steps = job.steps.filter(j => j.status !== 'queued');
-
-        job.steps.push({ status: 'processing', message: 'validating files', time: Date.now() })
+        
+        job.steps.push({...STEPS.validating, status: 'processing', time: Date.now() })
         runningJobs.set(id, job);
 
         let files = await uploadedFilesAndTypes(id, version)
         console.log("Determined files")
         if (files.format === 'ZIP') {
             console.log("Its zipped")
-            job.steps.push({ status: 'processing', message: 'extracting archive', time: Date.now() })
+            job.steps.push({...STEPS.extractArchive, status: 'processing', time: Date.now() })
             runningJobs.set(id, {...job});
             await unzip(id, files.files[0].name);
             files = await uploadedFilesAndTypes(id, version)
             job.files = files
+            job.unzip = true;
         } else {
             job.files = files
+            job.unzip = false;
         }
         // has files added
         runningJobs.set(id, {...job});
@@ -44,7 +88,10 @@ const q = queue(async (options) => {
         // This function can be passed to downstream processes allowing them to report progress back to the UI (e.g. reading large streams, blasting sequences etc)
         const updateStatusOnCurrentStep = (progress, total, message, summary) => {
             let step = job.steps[job.steps.length -1];
-            step.message = message || step.message;
+            // step.message = message || step.message;
+            if(message){
+                step.subTask = message
+            }
             step.progress = progress ?? step.progress;
             step.total = total ?? step.total;
             if(summary){
@@ -77,11 +124,11 @@ const q = queue(async (options) => {
             // Decide how to proceed based on the format / sequences as headers etc
             if (files.format === 'TSV_3_FILE') {
                 console.log("Its  TSV_3_FILE format")
-                job.steps.push({ status: 'processing', message: 'Converting to biom format', time: Date.now() })
+                job.steps.push({...STEPS.convertToBiom, status: 'processing', time: Date.now() })
                 runningJobs.set(id, {...job});
                 console.log("It has samples as columns? "+samplesAsColumns)
                 const biom = await toBiom(filePaths.otuTable, filePaths.samples, filePaths.taxa, samplesAsColumns, updateStatusOnCurrentStep, mapping)
-                job.steps.push({ status: 'processing', message: 'Adding total read counts pr sample', time: Date.now() })      
+                job.steps.push({...STEPS.addReadCounts, status: 'processing', time: Date.now() })      
                 runningJobs.set(id, {...job});
                 addReadCounts(biom)
                 
@@ -92,10 +139,10 @@ const q = queue(async (options) => {
 
         } else if (files.format === 'XLSX') {
             console.log("Its XLSX format")
-            job.steps.push({ status: 'processing', message: 'Converting to biom format', time: Date.now() })
+            job.steps.push({...STEPS.convertToBiom, status: 'processing', time: Date.now() })
             runningJobs.set(id, {...job});
             const biom = await processWorkBookFromFile(id, files.files[0].name, version, mapping)
-            job.steps.push({ status: 'processing', message: 'Adding total read counts pr sample', time: Date.now() })      
+            job.steps.push({...STEPS.addReadCounts, status: 'processing', time: Date.now() })      
             runningJobs.set(id, {...job});
             addReadCounts(biom)
             await writeBiomFormats(biom, id, version, job)
@@ -147,13 +194,20 @@ const pushJob = async (id) => {
 
 const writeBiomFormats = async (biom, id, version, job) => {
     console.log('writing biom 1.0')
-    job.steps.push({ status: 'processing', message: 'writing biom 1.0', time: Date.now() })
+    job.steps.push({...STEPS.writeBiom1, status: 'processing', time: Date.now() })
     runningJobs.set(id, {...job});
     await writeBiom(biom, `${config.dataStorage}${id}/${version}/data.biom.json`)
     console.log('writing biom 2.1')
-    job.steps.push({ status: 'processing', message: 'writing biom 2.1', time: Date.now() })
+    job.steps.push({...STEPS.writeBiom2, status: 'processing', time: Date.now() })
     runningJobs.set(id, {...job});
     await writeHDF5(biom, `${config.dataStorage}${id}/${version}/data.biom.h5`)
+}
+
+const addPendingSteps = job => {
+    const steps_ = job.steps;
+    
+    //console.log(Object.keys(STEPS).filter(s =>  !job.steps.map(a => a?.name).includes(s)).map(k => STEPS[k]));
+    return [...steps_, ...Object.keys(STEPS).filter(s =>  (!job.unzip ? s !== 'extractArchive' : true) && !steps_.map(a => a?.name).includes(s)).map(k => STEPS[k])]
 }
 
 export default (app) => {
@@ -176,6 +230,7 @@ export default (app) => {
         }
     });
 
+
     app.get("/dataset/:id/process/:version?", async function (req, res) {
         
         if (!req.params.id) {
@@ -192,7 +247,7 @@ export default (app) => {
                 } 
                 const metadata = await getMetadata(req.params.id, version)
                 if (job) {
-                    let data = {...job};
+                    let data = {...job, steps: addPendingSteps(job)};
                     if(!!metadata){
                         data.metadata = metadata
                     }

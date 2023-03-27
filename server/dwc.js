@@ -1,7 +1,7 @@
 
 import * as url from 'url';
 import fs from 'fs';
-import { getProcessingReport, writeProcessingReport, getMetadata, getCurrentDatasetVersion, readBiom, zipDwcArchive, rsyncToPublicAccess} from '../util/filesAndDirectories.js'
+import { getProcessingReport, writeProcessingReport, getMetadata, getCurrentDatasetVersion, readBiom, zipDwcArchive, rsyncToPublicAccess, dwcArchiveExists} from '../util/filesAndDirectories.js'
 import {registerDatasetInGBIF} from '../util/gbifRegistry.js'
 import { biomToDwc } from '../converters/dwc.js';
 import config from '../config.js'
@@ -32,16 +32,16 @@ const runningJobs = new Map();
         runningJobs.set(id, job);
         await zipDwcArchive(id, version)
         console.log("Archive zipped")
-        job.steps.push({ status: 'processing', message: 'Copying archive to public URI', time: Date.now() })
+       /* job.steps.push({ status: 'processing', message: 'Copying archive to public URI', time: Date.now() })
         runningJobs.set(id, job);
-        console.log("Archive copied to public access url")
+         console.log("Archive copied to public access url")
         await rsyncToPublicAccess(id, version)
         job.steps.push({ status: 'processing', message: 'Registering dataset in GBIF', time: Date.now() })
         runningJobs.set(id, job);
         const gbifDatasetKey = await registerDatasetInGBIF(id, config.gbifUsername, config.gbifPassword)
         job.gbifDatasetKey = gbifDatasetKey;
         runningJobs.set(id, job);
-        console.log("Dataset registered in GBIF, crawl triggered")
+        console.log("Dataset registered in GBIF, crawl triggered") */
     } catch (error) {
         console.log(error)
         
@@ -109,9 +109,57 @@ const processDwc = async function (req, res) {
     }
   };
 
+  const publishDwc = async function (req, res) {
+
+    console.log("publishDwc")
+    if (!req.params.id) {
+      res.sendStatus(400);
+    } else {
+        try {
+            let version = req?.query?.version;
+            if(!version){
+                version = await getCurrentDatasetVersion(req.params.id)
+            } 
+            const hasDwcArchive = await  dwcArchiveExists(req.params.id, version)
+            
+            
+            let report = await getProcessingReport(req.params.id, version);
+            report.publishing = {steps : []}
+            console.log("Copying Archive to public access URI")
+            report.publishing.steps.push({ status: 'processing', message: 'Copying archive to public URI', time: Date.now() })
+
+            await rsyncToPublicAccess(req.params.id, version)
+            report.publishing.steps.push({ status: 'processing', message: 'Registering dataset in GBIF', time: Date.now() })
+
+            const gbifDatasetKey = await registerDatasetInGBIF(req.params.id, config.gbifUsername, config.gbifPassword)
+            report.publishing.gbifDatasetKey = gbifDatasetKey;
+            console.log("Dataset registered in GBIF, crawl triggered")
+            report.publishing.steps.push({ status: 'finished', message: 'Registering dataset in GBIF complete', time: Date.now() })
+            await writeProcessingReport(req.params.id, version, report)
+            const metadata = await getMetadata(req.params.id, version)
+                if(report){
+                    if(!!metadata){
+                        report.metadata = metadata
+                    }
+                    res.json(report)
+                } else {
+                    res.sendStatus(404)
+                }
+        } catch (error) {
+            if(error === "DwC archive does not exist"){
+                res.status(400);
+            }
+            console.log(error)
+            res.sendStatus(500)
+        }
+    }
+  };
+
 
 export default  (app) => {
     app.post("/dataset/:id/dwc", processDwc);
+
+    app.post("/dataset/:id/register-in-gbif", publishDwc);
 
     app.get("/dataset/:id/dwc/:version?", async (req, res) => {
         if (!req.params.id) {

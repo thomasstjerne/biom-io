@@ -8,7 +8,7 @@ const storage = multer.diskStorage({
   //Specify the destination directory where the file needs to be saved
   destination: function (req, file, cb) {
     let id = req?.params?.id ?? req.id;
-    const dir = config.dataStorage + id + `/${req?.params?.version ?? "1"}` + "/original";
+    const dir = config.dataStorage + id + `/${req?.query?.version ?? "1"}` + "/original";
     if (!fs.existsSync(dir)){
         fs.mkdirSync(dir, { recursive: true });
     }

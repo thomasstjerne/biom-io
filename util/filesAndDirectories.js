@@ -172,4 +172,28 @@ export const zipDwcArchive = (id, version) => {
     })
 };
 
+export const dwcArchiveExists = async (id, version) => {
+  return new Promise((resolve, reject) => {
+  fs.access(`${config.dataStorage}${id}/${version}/archive.zip`, (error) => {
+    if (error) {
+      reject("DwC archive does not exist")
+    }
+    resolve()
+  });
+})
+}
+
+export const deleteFile = async (id, version, fileName) => {
+  return new Promise((resolve, reject) => {
+    fs.unlink(`${config.dataStorage}${id}/${version}/original/${fileName}`, (err) => {
+      if (err) {
+        reject(err);
+      }
+      resolve()
+      console.log("Deleted File successfully.");
+  });
+  
+})
+}
+
 

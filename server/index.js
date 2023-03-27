@@ -11,8 +11,10 @@ import metadata from './eml.js';
 import processing from './process.js'
 import dwc from './dwc.js'
 import terms from './terms.js';
-import mapping from './mapping.js';
+import enums from './enum.js';
 
+import mapping from './mapping.js';
+import files from './files.js';
 import cors from 'cors'
 import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport } from '../util/filesAndDirectories.js'
 
@@ -52,21 +54,19 @@ processing(app)
 dwc(app)
 // add routes for terms
 terms(app)
+// add routes for enums
+enums(app)
 // add routes for term mapping
 mapping(app)
-
-app.get('/', (req, res) => {
-    res.send('Hello World!')
-  })
-
-
+// add routes for files
+files(app)
 
 app.post('/dataset/upload', upload.array('tables', 3), function (req, res, next) {
     console.log(req.files)
     console.log(req.id)
     res.send(req.id)
   })
-app.put('/dataset/:id/upload/:version', upload.array('tables', 3), function (req, res, next) {
+app.put('/dataset/:id/upload', upload.array('tables', 3), function (req, res, next) {
     console.log(req.files)
     console.log(req.id)
     res.send(req?.params?.id)

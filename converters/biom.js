@@ -37,12 +37,12 @@ const getColumnIdTerm = (samplesAsColumns, termMapping) => {
 // converts an otu table with sample and taxon metada files to BIOM format
 export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumns = true, processFn = (progress, total, message, summary) => {}, termMapping = { taxa: {}, samples: {}}) => {
 
-  processFn(0, 0, 'reading sample file')
+  processFn(0, 0, 'Reading sample file')
   const samples = await streamReader.readMetaDataAsMap(sampleFile, /* undefined, */ processFn, termMapping.samples)
-   processFn(0, 0, 'reading taxon file', {sampleCount: samples.size});
+   processFn(0, 0, 'Reading taxon file', {sampleCount: samples.size});
   const taxa = await streamReader.readMetaDataAsMap(taxaFile, /* undefined, */ processFn, termMapping.taxa)
   console.log(`Taxa: ${taxa.size} samples: ${samples.size}`)  
-  processFn(0, taxa.size, 'reading OTU table', {taxonCount: taxa.size});
+  processFn(0, taxa.size, 'Reading OTU table', {taxonCount: taxa.size});
   const columnIdTerm = getColumnIdTerm(samplesAsColumns, termMapping)
   console.log("Column ID term: "+columnIdTerm)
   const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn, columnIdTerm);
