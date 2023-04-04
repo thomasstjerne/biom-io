@@ -16,6 +16,8 @@ import enums from './enum.js';
 import mapping from './mapping.js';
 import files from './files.js';
 import cors from 'cors'
+import authController from './Auth/auth.controller.js'
+import userController from './Auth/user.controller.js'
 import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport } from '../util/filesAndDirectories.js'
 
 const config = {
@@ -43,7 +45,12 @@ app.use(function (req, res, next) {
     next();
 });
 
-
+// add routes for logins etc
+authController(app)
+// add routes for listing users datasets
+userController(app)
+// add routes for initial file upload and dataset creation
+upload(app)
 // add routes for validation
 validation(app)
 // add routes for metadata
@@ -61,23 +68,13 @@ mapping(app)
 // add routes for files
 files(app)
 
-app.post('/dataset/upload', upload.array('tables', 3), function (req, res, next) {
-    console.log(req.files)
-    console.log(req.id)
-    res.send(req.id)
-  })
-app.put('/dataset/:id/upload', upload.array('tables', 3), function (req, res, next) {
-    console.log(req.files)
-    console.log(req.id)
-    res.send(req?.params?.id)
-  })
+
 
 app.get("/dataset/:id", async function (req, res) {
     if (!req.params.id) {
         res.sendStatus(404);
     } else {
 
-  
         try {
             let version = req.query?.version;
             if(!version){

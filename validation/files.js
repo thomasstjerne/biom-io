@@ -5,7 +5,7 @@ import {execSync, exec}  from 'child_process';
 // there may be hidden 'application/octet-stream' files when unzipping an excel workbook
 const mimeTypesToBeRemoved = ['application/zip', 'application/octet-stream']
 
-const getMimeFromPath = (filePath) => {
+export const getMimeFromPath = (filePath) => {
     const mimeType = execSync('file --mime-type -b "' + filePath + '"').toString();
     return mimeType.trim();
 }
@@ -100,7 +100,7 @@ const determineFormat = (files) => {
     }
 }
 
-const getFileSize = file => {
+export const getFileSize = file => {
     const {size} = fs.statSync(file);
     return size / (1024 * 1000)
 }

@@ -1,6 +1,5 @@
 
-import * as url from 'url';
-import fs from 'fs';
+import auth from './Auth/auth.js';
 import {writeMapping, getCurrentDatasetVersion} from '../util/filesAndDirectories.js'
 
 
@@ -25,7 +24,7 @@ const saveMapping = async function (req, res) {
   };
 
 export default  (app) => {
-    app.put("/dataset/:id/mapping", saveMapping);
-    app.post("/dataset/:id/mapping", saveMapping);
+    app.put("/dataset/:id/mapping",  auth.userCanModifyDataset(), saveMapping);
+    app.post("/dataset/:id/mapping", auth.userCanModifyDataset(), saveMapping);
 
 }

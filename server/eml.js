@@ -3,6 +3,7 @@ import * as url from 'url';
 import fs from 'fs';
 import { getEml } from '../util/Eml/index.js';
 import {writeEmlJson, writeEmlXml, getCurrentDatasetVersion} from '../util/filesAndDirectories.js'
+import auth from './Auth/auth.js';
 
 
 const processEml = async function (req, res) {
@@ -27,7 +28,7 @@ const processEml = async function (req, res) {
   };
 
 export default  (app) => {
-    app.put("/dataset/:id/metadata", processEml);
-    app.post("/dataset/:id/metadata", processEml);
+    app.put("/dataset/:id/metadata", auth.userCanModifyDataset(), processEml);
+    app.post("/dataset/:id/metadata", auth.userCanModifyDataset(), processEml);
 
 }

@@ -1,8 +1,11 @@
 
 import {deleteFile, getCurrentDatasetVersion} from '../util/filesAndDirectories.js'
+import {getMimeFromPath} from '../validation/files.js'
+import auth from './Auth/auth.js';
+import config from '../config.js'
 
-
-const deleteUploadedFile = async function (req, res) {
+import fs from "fs"
+const deleteUploadedFile = async  (req, res) => {
     if (!req.params.id || !req.params.filename) {
       res.sendStatus(400);
     } else {
@@ -20,7 +23,32 @@ const deleteUploadedFile = async function (req, res) {
     }
   };
 
+const downloadFile = async (req, res, fromOriginalDir) => {
+    if (!req.params.id || !req.params.filename) {
+        res.sendStatus(400);
+      } else {
+        const id = req.params.id;
+        let version = req?.query?.version;
+            if(!version){
+                version = await getCurrentDatasetVersion(req.params.id)
+            } 
+            let fileList = await fs.promises.readdir(`${config.dataStorage}${id}/${version}${fromOriginalDir ? '/original':'' }`);
+            if(fileList.includes(req.params.filename)){
+                const mimeType = getMimeFromPath(`${config.dataStorage}${id}/${version}${fromOriginalDir ? '/original':'' }/${req.params.filename}`)
+                res.setHeader("content-type", mimeType);
+                fs.createReadStream(`${config.dataStorage}${id}/${version}${fromOriginalDir ? '/original':'' }/${req.params.filename}`).pipe(res);
+            } else {
+                res.sendStatus(404)
+            }
+        
+      }
+     
+   
+  }
+
 export default  (app) => {
-    app.delete("/dataset/:id/file/:filename", deleteUploadedFile);
+    app.delete("/dataset/:id/file/:filename", auth.userCanModifyDataset(),  deleteUploadedFile);
+    app.get("/dataset/:id/file/:filename", (req, res) => downloadFile(req, res, false))
+    app.get("/dataset/:id/uploaded-file/:filename", (req, res) => downloadFile(req, res, true))
 
 }

@@ -46,22 +46,33 @@ export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumn
   const columnIdTerm = getColumnIdTerm(samplesAsColumns, termMapping)
   console.log("Column ID term: "+columnIdTerm)
   const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn, columnIdTerm);
-  const biom = new Biom({
-    rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
-    columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),
-    matrix_type: 'sparse',
-    shape: samplesAsColumns ? [taxa.size, samples.size] : [samples.size, taxa.size],
-    data: otuTable
+  console.log("Finished readOtuTableToSparse")
+  return new Promise((resolve, reject) => {
+    try {
+        console.log("Create Biom")
+        const biom = new Biom({
+            rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
+            columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),
+            matrix_type: 'sparse',
+            shape: samplesAsColumns ? [taxa.size, samples.size] : [samples.size, taxa.size],
+            data: otuTable
+          })
+          console.log("Biom created")
+          if(!samplesAsColumns){
+            // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
+            biom.transpose()
+          }
+          console.log("Resiolve toBiom")
+         resolve(biom);
+    } catch (error) {
+        reject(error)
+    }
+   
   })
-
-  if(!samplesAsColumns){
-    // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
-    biom.transpose()
-  }
- return biom;
+  
 }
 
-const writeBigArraysInChunksToStream = (stream, arr, chunkSize) => {
+const writeBigArraysInChunksToStream = (stream, arr, chunkSize, processFn = (progress) => {}) => {
     const startArray = "[\n", endArray = "\n]";
     stream.write(startArray)
     for (let i = 0; i < arr.length; i += chunkSize) {
@@ -72,17 +83,24 @@ const writeBigArraysInChunksToStream = (stream, arr, chunkSize) => {
         } else {
             stream.write(endArray)
         }
+        if(i % 1000 === 0){
+            processFn(i);
+        }
     }
+    processFn(arr.length)
     
 }
 
-export const writeBiom = async (biom, path) => {
+export const writeBiom = async (biom, path, processFn = (progress, total, message, summary) => {}) => {
     const startJson = "{\n", endJson = "\n}";
     return new Promise((resolve, reject)=>{
         try {
             const biomStream = fs.createWriteStream(path, {
                 flags: "a",
               });
+              biomStream.on('close', () => {
+                resolve()
+              })
               biomStream.write(startJson);
               console.log(Object.keys(biom))
               const keys = Object.keys(biom);
@@ -90,13 +108,14 @@ export const writeBiom = async (biom, path) => {
                 biomStream.write(`"${k.slice(1)}": ${JSON.stringify(biom[k])},\n`)
               })
               biomStream.write(`"columns":`);
-              writeBigArraysInChunksToStream(biomStream, biom._columns, 100)
+              writeBigArraysInChunksToStream(biomStream, biom._columns, 100, (progress) => processFn(progress, biom._columns.length, 'Writing columns'))
               biomStream.write(`,"rows":`);
-              writeBigArraysInChunksToStream(biomStream, biom._rows, 100);
+              writeBigArraysInChunksToStream(biomStream, biom._rows, 100, (progress) => processFn(progress, biom._rows.length, 'Writing rows'));
               biomStream.write(`,"data":`);
-              writeBigArraysInChunksToStream(biomStream, biom._data, 1000)
+              writeBigArraysInChunksToStream(biomStream, biom._data, 1000, (progress) => processFn(progress, biom._data.length, 'Writing data'))
               biomStream.write(endJson);
-              resolve()
+              biomStream.close()
+              
               //biomStream.write(JSON.stringify(biom, null, 2)) 
              
         } catch (error) {

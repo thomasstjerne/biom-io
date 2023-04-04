@@ -81,6 +81,8 @@ export const readOtuTableToSparse = (path, progressFn = (progress, total, messag
               }
             }       
           }
+          // We are finished update to final count
+          progressFn(count)
         });
         // Catch any error
         parser.on('error', function(err){

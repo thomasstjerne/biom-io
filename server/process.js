@@ -1,10 +1,11 @@
 
 import * as url from 'url';
-import fs from 'fs';
+import auth from './Auth/auth.js';
 import config from '../config.js'
 import _ from 'lodash'
 import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport, getMetadata, readTsvHeaders, readMapping } from '../util/filesAndDirectories.js'
-import { uploadedFilesAndTypes, unzip } from '../validation/files.js'
+import { getDataset } from '../util/dataset.js';
+import { uploadedFilesAndTypes, getMimeFromPath, getFileSize, unzip } from '../validation/files.js'
 import { determineFileNames, otuTableHasSamplesAsColumns, otuTableHasSequencesAsColumnHeaders } from '../validation/tsvformat.js'
 import { processWorkBookFromFile } from "../converters/excel.js"
 import { writeBiom, toBiom, addReadCounts } from '../converters/biom.js';
@@ -75,13 +76,17 @@ const q = queue(async (options) => {
             job.steps.push({...STEPS.extractArchive, status: 'processing', time: Date.now() })
             runningJobs.set(id, {...job});
             await unzip(id, files.files[0].name);
+            job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
             files = await uploadedFilesAndTypes(id, version)
+
             job.files = files
             job.unzip = true;
         } else {
             job.files = files
             job.unzip = false;
         }
+        job.steps[0] = {...job.steps[0], status: 'finished'}
+
         // has files added
         runningJobs.set(id, {...job});
         
@@ -128,11 +133,15 @@ const q = queue(async (options) => {
                 runningJobs.set(id, {...job});
                 console.log("It has samples as columns? "+samplesAsColumns)
                 const biom = await toBiom(filePaths.otuTable, filePaths.samples, filePaths.taxa, samplesAsColumns, updateStatusOnCurrentStep, mapping)
+                job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
+
                 job.steps.push({...STEPS.addReadCounts, status: 'processing', time: Date.now() })      
                 runningJobs.set(id, {...job});
-                addReadCounts(biom)
-                
-                await writeBiomFormats(biom, id, version, job)
+                console.log("Adding read counts pr sample")
+                await addReadCounts(biom)
+                job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
+
+                await writeBiomFormats(biom, id, version, job, updateStatusOnCurrentStep)
             } else if(files.format === 'TSV_2_FILE'){
                 // TODO 
             }
@@ -142,10 +151,11 @@ const q = queue(async (options) => {
             job.steps.push({...STEPS.convertToBiom, status: 'processing', time: Date.now() })
             runningJobs.set(id, {...job});
             const biom = await processWorkBookFromFile(id, files.files[0].name, version, mapping)
+            job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
             job.steps.push({...STEPS.addReadCounts, status: 'processing', time: Date.now() })      
             runningJobs.set(id, {...job});
-            addReadCounts(biom)
-            await writeBiomFormats(biom, id, version, job)
+            await addReadCounts(biom)
+            await writeBiomFormats(biom, id, version, job, updateStatusOnCurrentStep)
             // callback()
             //res.json(biom)
         } else {
@@ -165,7 +175,7 @@ const q = queue(async (options) => {
 
 
 const pushJob = async (id) => {
-    runningJobs.set(id, { id: id, steps: [{ status: 'queued', time: Date.now() }] })
+    runningJobs.set(id, { id: id, filesAvailable:[], steps: [{ status: 'queued', time: Date.now() }] })
     try {
         q.push({ id: id }, async (error, result) => {
             if (error) {
@@ -192,15 +202,21 @@ const pushJob = async (id) => {
 
 }
 
-const writeBiomFormats = async (biom, id, version, job) => {
+const writeBiomFormats = async (biom, id, version, job, updateStatusOnCurrentStep) => {
     console.log('writing biom 1.0')
     job.steps.push({...STEPS.writeBiom1, status: 'processing', time: Date.now() })
     runningJobs.set(id, {...job});
-    await writeBiom(biom, `${config.dataStorage}${id}/${version}/data.biom.json`)
+    await writeBiom(biom, `${config.dataStorage}${id}/${version}/data.biom.json`, updateStatusOnCurrentStep)
+    job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
+    job.filesAvailable = [...job.filesAvailable, {format: 'BIOM 1.0', fileName: 'data.biom.json', size: getFileSize(`${config.dataStorage}${id}/${version}/data.biom.json`), mimeType: 'application/json'} ]
     console.log('writing biom 2.1')
     job.steps.push({...STEPS.writeBiom2, status: 'processing', time: Date.now() })
     runningJobs.set(id, {...job});
-    await writeHDF5(biom, `${config.dataStorage}${id}/${version}/data.biom.h5`)
+    const {errors} = await writeHDF5(biom, `${config.dataStorage}${id}/${version}/data.biom.h5`, updateStatusOnCurrentStep)
+    job.processingErrors = {hdf5: errors || []}
+    job.filesAvailable = [...job.filesAvailable, {format: 'BIOM 2.1', fileName: 'data.biom.h5', size: getFileSize(`${config.dataStorage}${id}/${version}/data.biom.h5`), mimeType: 'application/x-hdf5'} ]
+    job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
+    runningJobs.set(id, {...job});
 }
 
 const addPendingSteps = job => {
@@ -211,7 +227,7 @@ const addPendingSteps = job => {
 }
 
 export default (app) => {
-    app.post("/dataset/:id/process", async function (req, res) {
+    app.post("/dataset/:id/process", auth.userCanModifyDataset(), async function (req, res) {
         if (!req.params.id) {
             res.sendStatus(404);
         } else {
@@ -245,19 +261,13 @@ export default (app) => {
                 if(!version){
                     version = await getCurrentDatasetVersion(req.params.id);
                 } 
-                const metadata = await getMetadata(req.params.id, version)
+                let report = await getDataset(req.params.id, version);
                 if (job) {
-                    let data = {...job, steps: addPendingSteps(job)};
-                    if(!!metadata){
-                        data.metadata = metadata
-                    }
+                    let data = {...report,...job, steps: addPendingSteps(job)};     
                     res.json(data);
                 } else {     
-                let report = await getProcessingReport(req.params.id, version);
+                
                 if(report){
-                    if(!!metadata){
-                        report.metadata = metadata
-                    }
                     res.json(report)
                 } else {
                     res.sendStatus(404)

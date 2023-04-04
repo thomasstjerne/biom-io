@@ -1,7 +1,7 @@
 import {uploadedFilesAndTypes, unzip} from '../validation/files.js'
 import {determineFileNames, otuTableHasSamplesAsColumns, otuTableHasSequencesAsColumnHeaders} from '../validation/tsvformat.js'
 import {processWorkBookFromFile} from "../converters/excel.js"
-import {getCurrentDatasetVersion, readTsvHeaders, getProcessingReport, getMetadata,} from '../util/filesAndDirectories.js'
+import {getCurrentDatasetVersion, readTsvHeaders, getProcessingReport, getMetadata, writeProcessingReport} from '../util/filesAndDirectories.js'
 //import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport, getMetadata, readTsvHeaders, readMapping } from '../util/filesAndDirectories.js'
 
 
@@ -57,16 +57,24 @@ export default (app) => {
                   if(filePaths?.taxa){
                     validationReport.taxonHeaders = await readTsvHeaders(filePaths?.taxa)
                   }
-                  res.json({...processionReport, ...validationReport}) 
+                  const report = {...processionReport, unzip: false, ...validationReport}
+                  await writeProcessingReport(req.params.id,version, report)
+                  res.json(report) 
                 } else if(files.format === 'XLSX') {
                 //  const biom = await processWorkBookFromFile(req.params.id, files.files[0].name, version)
                  // res.json(biom)
-                 res.json({...processionReport, files:{...files, id: req.params.id}}) 
+                 const report = {...processionReport, unzip: false, files:{...files, id: req.params.id}};
+                 await writeProcessingReport(req.params.id,version, report)
+                 res.json(report) 
                 } else if(files.format === 'ZIP') {
                   await unzip(req.params.id, files.files[0].name)
-                  res.json({...processionReport, files:{...files, id: req.params.id}})
+                  const report = {...processionReport, unzip: true, files:{...files, id: req.params.id}}
+                  await writeProcessingReport(req.params.id,version, report)
+                  res.json(report) 
                 } else {
-                  res.json({...processionReport, files:{...files, id: req.params.id}})
+                  const report = {...processionReport, unzip: false, files:{...files, id: req.params.id}}
+                  await writeProcessingReport(req.params.id,version, report)
+                  res.json(report) 
                 } 
             } catch (error) {
                 console.log(error)
