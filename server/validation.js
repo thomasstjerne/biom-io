@@ -1,6 +1,6 @@
 import {uploadedFilesAndTypes, unzip} from '../validation/files.js'
 import {determineFileNames, otuTableHasSamplesAsColumns, otuTableHasSequencesAsColumnHeaders} from '../validation/tsvformat.js'
-import {processWorkBookFromFile} from "../converters/excel.js"
+import {processWorkBookFromFile, readXlsxHeaders} from "../converters/excel.js"
 import {getCurrentDatasetVersion, readTsvHeaders, getProcessingReport, getMetadata, writeProcessingReport} from '../util/filesAndDirectories.js'
 //import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport, getMetadata, readTsvHeaders, readMapping } from '../util/filesAndDirectories.js'
 
@@ -63,7 +63,10 @@ export default (app) => {
                 } else if(files.format === 'XLSX') {
                 //  const biom = await processWorkBookFromFile(req.params.id, files.files[0].name, version)
                  // res.json(biom)
-                 const report = {...processionReport, unzip: false, files:{...files, id: req.params.id}};
+
+                 const headers = await readXlsxHeaders(req.params.id, files?.files[0]?.name, version)
+                 console.log(headers)
+                 const report = {...processionReport, ...headers, unzip: false, files:{...files, id: req.params.id}};
                  await writeProcessingReport(req.params.id,version, report)
                  res.json(report) 
                 } else if(files.format === 'ZIP') {

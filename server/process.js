@@ -7,7 +7,7 @@ import { getCurrentDatasetVersion, writeProcessingReport, getProcessingReport, g
 import { getDataset } from '../util/dataset.js';
 import { uploadedFilesAndTypes, getMimeFromPath, getFileSize, unzip } from '../validation/files.js'
 import { determineFileNames, otuTableHasSamplesAsColumns, otuTableHasSequencesAsColumnHeaders } from '../validation/tsvformat.js'
-import { processWorkBookFromFile } from "../converters/excel.js"
+import { processWorkBookFromFile, readXlsxHeaders } from "../converters/excel.js"
 import { writeBiom, toBiom, addReadCounts } from '../converters/biom.js';
 import { writeHDF5 } from '../converters/hdf5.js'
 import queue from 'async/queue.js';
@@ -107,6 +107,7 @@ const q = queue(async (options) => {
         const mapping = await readMapping(id, version);
         if(!mapping){
             // should we just warn that no mapping was created? or should it throw?
+            job.mapping = {samples: {}, taxa: {}};
         } else {
             job.mapping = mapping;
         }
@@ -150,11 +151,12 @@ const q = queue(async (options) => {
             console.log("Its XLSX format")
             job.steps.push({...STEPS.convertToBiom, status: 'processing', time: Date.now() })
             runningJobs.set(id, {...job});
-            const biom = await processWorkBookFromFile(id, files.files[0].name, version, mapping)
+            const biom = await processWorkBookFromFile(id, files.files[0].name, version, job.mapping)
             job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
             job.steps.push({...STEPS.addReadCounts, status: 'processing', time: Date.now() })      
             runningJobs.set(id, {...job});
             await addReadCounts(biom)
+            job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
             await writeBiomFormats(biom, id, version, job, updateStatusOnCurrentStep)
             // callback()
             //res.json(biom)
@@ -167,6 +169,7 @@ const q = queue(async (options) => {
     } catch (error) {
         console.log("There was an error")
         console.log(error)
+        job.steps.push({ status: 'failed', message: error?.message, time: Date.now() })
        // throw error
         // callback(error)
     }

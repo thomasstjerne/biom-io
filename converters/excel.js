@@ -92,7 +92,6 @@ export const toBiom = async (data, termMapping) => {
         samples,
         taxa
     } = data;
-    
       const sampleMap = getMapFromMatrix(samples.data,  termMapping.samples)
       const taxaMap = getMapFromMatrix(taxa.data, termMapping.taxa)
       const sparseData = [];
@@ -115,11 +114,12 @@ export const toBiom = async (data, termMapping) => {
         rows: rows.map(r => ({id: r, metadata: taxaMap.get(r)})), 
         columns: columns.map(c => ({id: c, metadata: sampleMap.get(c)})),
         matrix_type: 'sparse',
-        shape: [taxaMap.size, sampleMap.size],
+        shape: [rows.length, columns.length], //[taxaMap.size, sampleMap.size],
         data: sparseData
       })
       resolve(biom)
     } catch (error) {
+      console.log(error)
       reject(error)
     }
   })
@@ -161,6 +161,42 @@ export const processWorkBookFromFile = async (id, fileName, version, termMapping
     }
   })
 
+}
+
+export const readXlsxHeaders = async (id, fileName, version) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const stream = fs.createReadStream(`${config.dataStorage}${id}/${version}/original/${fileName}`);
+
+      const buffers = [];
+      stream.on("data", function (data) { buffers.push(data); });
+      stream.on('error', (error) => {
+        reject(error)
+      })
+      stream.on("end", async () => {
+        const buffer = Buffer.concat(buffers);
+        const workbook = xlsx.read(buffer, {cellDates: true});
+
+        console.log(workbook.SheetNames)
+        if(workbook.SheetNames.length !== 3){
+          throw "There must be 3 sheets, otuTable, taxa and samples";
+        } else {
+
+        const data = workbook.SheetNames.map(n => ({name: n, data: xlsx.utils.sheet_to_json(workbook.Sheets[n], {header: 1})}));
+        const {taxa, samples} = determineFileNames(data)
+
+        let result = {
+          sampleHeaders: samples?.data?.[0],
+          taxonHeaders: taxa?.data?.[0]
+        }
+        resolve(result)
+        }
+      });
+      
+    } catch (error) {
+      reject(error)
+    }
+  })
 }
 
 
