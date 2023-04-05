@@ -1,5 +1,6 @@
 
 import {deleteFile, getCurrentDatasetVersion} from '../util/filesAndDirectories.js'
+import {validate} from './validation.js'
 import {getMimeFromPath} from '../validation/files.js'
 import auth from './Auth/auth.js';
 import config from '../config.js'
@@ -15,6 +16,7 @@ const deleteUploadedFile = async  (req, res) => {
                 version = await getCurrentDatasetVersion(req.params.id)
             } 
             await deleteFile(req.params.id, version, req.params.filename)
+            await validate(req.params.id)
             res.sendStatus(200) 
         } catch (error) {
             console.log(error)
