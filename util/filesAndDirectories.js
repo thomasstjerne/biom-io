@@ -183,7 +183,7 @@ export const dwcArchiveExists = async (id, version) => {
 })
 }
 
-export const deleteFile = async (id, version, fileName) => {
+export const deleteOriginalFile = async (id, version, fileName) => {
   return new Promise((resolve, reject) => {
     fs.unlink(`${config.dataStorage}${id}/${version}/original/${fileName}`, (err) => {
       if (err) {
@@ -194,6 +194,52 @@ export const deleteFile = async (id, version, fileName) => {
   });
   
 })
+}
+
+export const deleteFile = async (id, version, fileName) => {
+  return new Promise((resolve, reject) => {
+    fs.unlink(`${config.dataStorage}${id}/${version}/${fileName}`, (err) => {
+      if (err) {
+        reject(err);
+      }
+      resolve()
+      console.log("Deleted File successfully.");
+  });
+  
+})
+}
+
+export const fileExists = async (id, version, fileName) => {
+  return new Promise((resolve, reject) => {
+  fs.access(`${config.dataStorage}${id}/${version}/${fileName}`, (error) => {
+    if (error) {
+      resolve(false)
+    }
+    resolve(true)
+  });
+})
+}
+
+export const wipeGeneratedFilesAndResetProccessing = async (id, version) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const files = ['data.biom.json', 'data.biom.h5', 'archive.zip', 'processing.json', 'archive/dna.txt', 'archive/occurrence.txt', 'archive/meta.xml'];
+      for (let f of files) {
+        const exists = await fileExists(id, version, f)
+        if(exists){
+          await deleteFile(id, version, f)
+        }
+        
+      }
+      resolve(`Cleaned directories`)
+    } catch (error) {
+      reject(error)
+    }
+    
+    
+  
+})
+
 }
 
 

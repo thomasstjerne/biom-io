@@ -42,7 +42,7 @@ export default {
             },
              {
                 name: 'target_gene',
-                description: "The marker / target gene. Eaxmples: ITS, 16S, 12S, COI",
+                description: "The marker / target gene. Examples: ITS, 16S, 12S, COI",
                 synonyms: ['marker'],
                 isRequired: true
             } , 

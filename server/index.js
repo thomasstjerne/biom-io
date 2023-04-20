@@ -15,6 +15,7 @@ import enums from './enum.js';
 
 import mapping from './mapping.js';
 import files from './files.js';
+import data from './data.js';
 import cors from 'cors'
 import authController from './Auth/auth.controller.js'
 import userController from './Auth/user.controller.js'
@@ -67,6 +68,8 @@ enums(app)
 mapping(app)
 // add routes for files
 files(app)
+// add routes for data display
+data(app)
 
 
 

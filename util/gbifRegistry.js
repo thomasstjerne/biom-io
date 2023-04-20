@@ -2,7 +2,6 @@ import axios from 'axios'
 import _ from "lodash";
 import config from '../config.js'
 
-
 export const isRegisteredInGBIF = async (ednaDatasetID) => {
   const response = await axios.get(`${config.gbifBaseUrl}dataset?identifier=${ednaDatasetID}`);
 
@@ -87,7 +86,10 @@ export const registerDatasetInGBIF = async (ednaDatasetID, username, password) =
     const registered = await isRegisteredInGBIF(ednaDatasetID);
 
     if (registered) {
-        console.log(`Study ${ednaDatasetID} is already registered, changes will be picked up on next crawl`);
+        
+        console.log(`Dataset ${ednaDatasetID} is already registered, changes will be picked up on next crawl`);
+        await crawlDataset(registered?.key, username, password)
+        return registered?.key;
       } else if (!registered) {
        const response = await registerStudy(ednaDatasetID, username, password)
             const uuid = response?.data;

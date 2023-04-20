@@ -2,6 +2,7 @@ import util, {streamReader} from '../util/index.js'
 import fs from 'fs';
 import {Biom} from 'biojs-io-biom';
 import _ from 'lodash'
+import {getGroupMetaDataAsJsonString} from '../validation/termMapper.js'
 const getMetaDataRow = row => {
     if(!row?.id){
        // console.log(row)
@@ -35,7 +36,7 @@ const getColumnIdTerm = (samplesAsColumns, termMapping) => {
 }
 
 // converts an otu table with sample and taxon metada files to BIOM format
-export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumns = true, processFn = (progress, total, message, summary) => {}, termMapping = { taxa: {}, samples: {}}) => {
+export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumns = true, processFn = (progress, total, message, summary) => {}, termMapping = { taxa: {}, samples: {}, defaultValues: {}}, id) => {
 
   processFn(0, 0, 'Reading sample file')
   const samples = await streamReader.readMetaDataAsMap(sampleFile, /* undefined, */ processFn, termMapping.samples)
@@ -47,10 +48,13 @@ export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumn
   console.log("Column ID term: "+columnIdTerm)
   const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn, columnIdTerm);
   console.log("Finished readOtuTableToSparse")
+  
   return new Promise((resolve, reject) => {
     try {
         console.log("Create Biom")
         const biom = new Biom({
+            id: id || null,
+            comment: getGroupMetaDataAsJsonString(termMapping),   // Biom v1 does not support group metadata where we store field default values. Therefore this is given as a JSON string in the comment field 
             rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
             columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),
             matrix_type: 'sparse',
@@ -62,7 +66,7 @@ export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumn
             // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
             biom.transpose()
           }
-          console.log("Resiolve toBiom")
+          console.log("Resolve toBiom")
          resolve(biom);
     } catch (error) {
         reject(error)

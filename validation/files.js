@@ -40,7 +40,7 @@ export const unzip = async (id, fileName, version = 1) => {
     })
 }
 
-export const deleteFile = async (id, fileName, version = 1) => {
+const deleteFile = async (id, fileName, version = 1) => {
     return new Promise((resolve, reject) => {
         try {
              execSync(`rm "${config.dataStorage}${id}/${version}/original/${fileName}"`);

@@ -1,5 +1,5 @@
 
-import {deleteFile, getCurrentDatasetVersion} from '../util/filesAndDirectories.js'
+import {deleteOriginalFile, getCurrentDatasetVersion} from '../util/filesAndDirectories.js'
 import {validate} from './validation.js'
 import {getMimeFromPath} from '../validation/files.js'
 import auth from './Auth/auth.js';
@@ -15,7 +15,7 @@ const deleteUploadedFile = async  (req, res) => {
             if(!version){
                 version = await getCurrentDatasetVersion(req.params.id)
             } 
-            await deleteFile(req.params.id, version, req.params.filename)
+            await deleteOriginalFile(req.params.id, version, req.params.filename)
             await validate(req.params.id)
             res.sendStatus(200) 
         } catch (error) {

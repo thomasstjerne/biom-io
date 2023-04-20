@@ -11,6 +11,33 @@ const init = async () => {
 
 init();
 
+const addGroupMetadataFromJson = (f, biom) => {
+
+    try {
+        const comment = biom.comment
+        if(comment){
+            const parsed = JSON.parse(comment)
+            // If one of observatiopn or sample is present, there is some group metadata to be added to the file
+            if(parsed?.defaultValues?.observation){
+                const json = JSON.stringify(parsed?.defaultValues?.observation);
+                f.get("observation/group-metadata").create_dataset('default_values', json, null, `S${json.length}`) 
+                f.get("observation/group-metadata/default_values").create_attribute('data_type', "json", null, 'S4')
+                  //.create_attribute('defaultValues', JSON.stringify(parsed?.defaultValues?.observation), null, 'S')
+            }
+            if(parsed?.defaultValues?.sample){
+                const json = JSON.stringify(parsed?.defaultValues?.sample)
+                f.get("sample/group-metadata").create_dataset('default_values',  json, null, `S${json.length}`) 
+                f.get("sample/group-metadata/default_values").create_attribute('data_type', "json", null, 'S4')
+               // f.get("sample/group-metadata").create_attribute('defaultValues', JSON.stringify(parsed?.defaultValues?.sample), null, 'S')
+            }
+
+        }
+    } catch (error) {
+        console.log("error adding group-metadata")
+        console.log(error)
+    }
+}
+
 const getIndptr = (sparseMatrix, idx, size) => {
     // idx 0 for rows, 1 for columns
     let index = sparseMatrix[0][idx];
@@ -75,7 +102,7 @@ const getTypeAndValues = (arr, attr) => {
         type = 'f'
     }
     let key = attr.split('metadata.')?.[1]
-    // Skip columns with strings longer than 1024, except for the DNA sequence and report to the user which columns have been skipped
+    // Skip columns with strings longer than MAX_FIXED_STRING_LENGTH, and report to the user which columns have been skipped. But what if the sequences are longer?
     if(/* key !== "DNA_sequence" &&  */type === 'S' && length > MAX_FIXED_STRING_LENGTH){
         
         throw `Tried to create a ${length} length string for ${key}. We only support fixed strings up to ${MAX_FIXED_STRING_LENGTH}. The field ${key} is skipped in the hdf5 file`
@@ -140,6 +167,8 @@ export const writeHDF5 = async (biom, hdf5file) => {
         f.create_group('sample/matrix') // The HDF5 group that contains sample specific information and a sample oriented data oriented view of the data
         f.create_group('sample/metadata') // The HDF5 group that contains matrix data oriented for sample-wise operations (e.g., in compressed sparse column format)
         f.create_group('sample/group-metadata') // The HDF5 group that contains sample specific metadata information
+
+        addGroupMetadataFromJson(f, biom)
 
         const rowIds = getTypeAndValues(biom.rows, 'id')
         // console.log(rowIds)
@@ -289,4 +318,157 @@ export const readHDF5 = async (hdf5file) => {
     }
 
 }
+
+export const getSamplesForGeoJson = async (hdf5file) => {
+    try {
+        let f = new h5wasm.File(hdf5file, "r");
+    let decimalLongitude = f.get('sample/metadata/decimalLongitude').to_array()
+    let decimalLatitude = f.get('sample/metadata/decimalLatitude').to_array()
+    let id = f.get('sample/metadata/id').to_array()
+  
+
+    return {id, decimalLatitude, decimalLongitude}
+    } catch (error) {
+        throw error
+    }
+    
+
+}
+
+export const getSamples = async (hdf5file) => {
+    try {
+    let f = new h5wasm.File(hdf5file, "r");
+    let res = {};
+    let keys = f.get('sample/metadata').keys(); //.to_array()
+    keys.forEach(key => {
+        res[key] = f.get(`sample/metadata/${key}`).to_array();
+    })
+    
+    return res;
+} catch (error) {
+    throw error
+}
+
+}
+
+export const getSparseMatrix = async  (hdf5file, sampleIndex) => {
+    await h5wasm.ready;
+
+    let f = new h5wasm.File(hdf5file, "r");
+    console.log(f.keys())
+    const data = f.get("observation/matrix/data").to_array();
+    const indices = f.get("observation/matrix/indices").to_array();
+    const indptr = f.get("observation/matrix/indptr").to_array();
+
+    let indptrIdx = 0;
+    let numRows = indptr[indptrIdx + 1] - indptr[indptrIdx];
+    const sparseMatrix = data.map((d, idx) => {
+        let res = [indptrIdx, indices[idx], d];
+        numRows--;
+        if (numRows === 0) {
+            indptrIdx++
+            numRows = indptr[indptrIdx + 1] - indptr[indptrIdx];
+        }
+        return res;
+    })
+    const idx = Number(sampleIndex);
+    return !isNaN(idx) ? sparseMatrix.filter(row => row[1] === idx) : sparseMatrix;
+}
+
+export const getSampleTaxonomy = async  (hdf5file, sampleIndex) => {
+    await h5wasm.ready;
+
+    let f = new h5wasm.File(hdf5file, "r");
+    const data = f.get("observation/matrix/data").to_array();
+    const indices = f.get("observation/matrix/indices").to_array();
+    const indptr = f.get("observation/matrix/indptr").to_array();
+
+    let observationMetaData = {};
+    // Why do we put the id in the taxonomy? It is the only unique handle for an ASV, the scientificName could very well be non-unique across taxa/ASVs
+    f.get("observation/metadata").keys().filter(key => ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'id'].includes(key)).forEach(key => {
+        observationMetaData[key] = f.get(`observation/metadata/${key}`).to_array()
+    });
+    // console.log( f.get(`observation/metadata/taxonomy`).dtype)
+    let indptrIdx = 0;
+    let numRows = indptr[indptrIdx + 1] - indptr[indptrIdx];
+    const sparseMatrix = data.map((d, idx) => {
+        let res = [indptrIdx, indices[idx], d];
+        numRows--;
+        if (numRows === 0) {
+            indptrIdx++
+            numRows = indptr[indptrIdx + 1] - indptr[indptrIdx];
+        }
+        return res;
+    })
+    const idx = Number(sampleIndex);
+    const parentMap = new Map();
+    const filteredSparseMatrix = sparseMatrix.filter(row => row[1] === idx);
+    const headers = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'id'].filter(h => Object.keys(observationMetaData).includes(h));
+
+    const result = filteredSparseMatrix.map(row => {
+        let obj = {};
+        let _id = ""
+        for(let i = 0; i < headers.length; i++){
+            obj[headers[i]] = observationMetaData[headers[i]][row[0]]
+            if(i === headers.length -1){
+                obj.name = observationMetaData[headers[i]][row[0]]
+                obj.parent = _id
+                obj.rank = "ASV"
+                obj.value = 1;
+            }
+            if(i < headers.length -1){
+                let id = `${_id}${observationMetaData[headers[i]][row[0]]}_`;
+                parentMap.set(id, {parentId : _id, name: observationMetaData[headers[i]][row[0]], rank: headers[i]})
+            }
+            
+            _id += observationMetaData[headers[i]][row[0]] +"_"
+            
+        }
+        obj.readCount = row[2];
+
+        return obj;
+    })
+
+
+    return [...result, ...Array.from(parentMap).map(t => ({id: t[0] || "", parent: t[1].parentId, name: t[1].name, rank: t[1].rank}))];
+}
+
+export const getSampleCompositions = async  (hdf5file) => {
+    await h5wasm.ready;
+    let f = new h5wasm.File(hdf5file, "r");
+    const data = f.get("observation/matrix/data").to_array();
+    const indices = f.get("observation/matrix/indices").to_array();
+    const indptr = f.get("observation/matrix/indptr").to_array();
+
+    let observationMetaData = {};
+    // Why do we put the id in the taxonomy? It is the only unique handle for an ASV, the scientificName could very well be non-unique across taxa/ASVs
+    f.get("observation/metadata").keys().filter(key => ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'id'].includes(key)).forEach(key => {
+        observationMetaData[key] = f.get(`observation/metadata/${key}`).to_array()
+    });
+    // console.log( f.get(`observation/metadata/taxonomy`).dtype)
+    let indptrIdx = 0;
+    let numRows = indptr[indptrIdx + 1] - indptr[indptrIdx];
+    const sparseMatrix = data.map((d, idx) => {
+        let res = [indptrIdx, indices[idx], d];
+        numRows--;
+        if (numRows === 0) {
+            indptrIdx++
+            numRows = indptr[indptrIdx + 1] - indptr[indptrIdx];
+        }
+        return res;
+    })
+    const sampleIds = f.get(`sample/metadata/id`).to_array()
+    const result = sparseMatrix.reduce((acc, curr) => {
+        if(acc?.[sampleIds[curr[1]]]){
+            acc[sampleIds[curr[1]]].push(curr[0])
+        } else {
+            acc[sampleIds[curr[1]]] = [curr[0]]
+        }
+        return acc;
+    }, {})
+
+    return result;
+
+}
+
 

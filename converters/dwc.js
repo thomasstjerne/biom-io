@@ -10,6 +10,41 @@ const BASIS_OF_RECORD = "Material Sample";
 
 const writeMetaXml = async (occCore, dnaExt, path ) =>  await fs.promises.writeFile(`${path}/archive/meta.xml`, util.metaXml(occCore, dnaExt))
 
+const getDefaultTermsForMetaXml = (biomData, dnaTerms, occTerms) => {
+  let occDefaultTerms = []
+  let dnaDefaultTerms = [] 
+  const keySet = new Set()
+  if(biomData.comment) {
+    try {
+      let parsed = JSON.parse(biomData.comment);
+      if(parsed?.defaultValues?.observation){
+        Object.keys(parsed?.defaultValues?.observation).forEach(key => {
+          if(dnaTerms.has(key)){
+            keySet.add(key)
+            dnaDefaultTerms.push({...dnaTerms.get(key), default: parsed?.defaultValues?.observation[key]})
+          } else if(occTerms.has(key)){
+            occDefaultTerms.push({...occTerms.get(key), default: parsed?.defaultValues?.observation[key]})
+          }
+        })
+      }
+      if(parsed?.defaultValues?.sample){
+        Object.keys(parsed?.defaultValues?.sample).forEach(key => {
+          keySet.add(key)
+          if(dnaTerms.has(key)){
+            dnaDefaultTerms.push({...dnaTerms.get(key), default: parsed?.defaultValues?.sample[key]})
+          } else if(occTerms.has(key)){
+            occDefaultTerms.push({...occTerms.get(key), default: parsed?.defaultValues?.sample[key]})
+          }
+        })
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+  return {occDefaultTerms, dnaDefaultTerms, keySet}
+}
+
+
 export const biomToDwc = async (biomData, termMapping = { taxa: {}, samples: {}}, path) => {
   try{
 
@@ -27,11 +62,19 @@ export const biomToDwc = async (biomData, termMapping = { taxa: {}, samples: {}}
     const taxonHeaders = Object.keys(_.get(biomData, 'rows[0].metadata'));
    // console.log(taxonHeaders)
     const sampleHeaders = Object.keys(_.get(biomData, 'columns[0].metadata'));
-    const relevantOccTerms  = [...sampleHeaders.filter(key => occTerms.has(sampleTerm(key))).map(key => occTerms.get(sampleTerm(key))),
-        ...taxonHeaders.filter(key => occTerms.has(taxonTerm(key))).map(key => occTerms.get(taxonTerm(key)))];
-    const relevantDnaTerms = [...sampleHeaders.filter(key => dnaTerms.has(sampleTerm(key))).map(key => dnaTerms.get(sampleTerm(key))),
-        ...taxonHeaders.filter(key => dnaTerms.has(taxonTerm(key))).map(key => dnaTerms.get(taxonTerm(key))),
+
+    const defaults = getDefaultTermsForMetaXml(biomData, dnaTerms, occTerms)
+
+    const relevantOccTerms  = [...sampleHeaders.filter(key => occTerms.has(sampleTerm(key)) && !defaults.keySet.has(key)).map(key => occTerms.get(sampleTerm(key))),
+        ...taxonHeaders.filter(key => occTerms.has(taxonTerm(key))  && !defaults.keySet.has(key)).map(key => occTerms.get(taxonTerm(key))),
+        ...defaults.occDefaultTerms
       ];
+    const relevantDnaTerms = [...sampleHeaders.filter(key => dnaTerms.has(sampleTerm(key)) && !defaults.keySet.has(key)).map(key => dnaTerms.get(sampleTerm(key))),
+        ...taxonHeaders.filter(key => dnaTerms.has(taxonTerm(key)) && !defaults.keySet.has(key)).map(key => dnaTerms.get(taxonTerm(key))),
+        ...defaults.dnaDefaultTerms
+      ];
+    
+   
     //  console.log("Relevant DNA terms: "+ relevantDnaTerms.map(k => k.name))
    //   console.log("Relevant OCC terms: "+ relevantOccTerms.map(k => k.name))
     await writeMetaXml([...relevantOccTerms, occTerms.get('sampleSizeValue'), occTerms.get('sampleSizeUnit'), occTerms.get('organismQuantity'), occTerms.get('organismQuantityType'), occTerms.get('basisOfRecord'), occTerms.get('eventID')],relevantDnaTerms, path)

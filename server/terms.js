@@ -1,6 +1,6 @@
 import util from "../util/index.js";
 import requiredDwcterms from "../enum/requiredDwcterms.js";
-
+import defaultValueterms from "../enum/defaultValueterms.js";
 export default  (app) => {
 
     app.get("/terms/dwc", async (req, res) => {
@@ -21,6 +21,18 @@ export default  (app) => {
         try {
         
         res.json(requiredDwcterms)
+        } catch (error) {
+            res.sendStatus(500)
+        }     
+        
+    })
+
+
+    app.get("/terms/defaultvalue", async (req, res) => {
+
+        try {
+        
+        res.json(defaultValueterms)
         } catch (error) {
             res.sendStatus(500)
         }     
