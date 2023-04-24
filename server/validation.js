@@ -55,8 +55,15 @@ export const validate = async (id) => {
       await writeProcessingReport(id,version, report)
       return report;
     } else if(files.format === 'XLSX') {
+      console.log("XLSX coming in")
+      let headers;
+      try {
+         headers = await readXlsxHeaders(id, files?.files[0]?.name, version)
+        
+      } catch (error) {
+        console.log(error)
+      }
     
-     const headers = await readXlsxHeaders(id, files?.files[0]?.name, version)
      const report = {...processionReport, ...headers, unzip: false, files:{...files, id: id}};
      await writeProcessingReport(id,version, report)
      return report
@@ -86,7 +93,7 @@ export default (app) => {
                 let report = await validate(req?.params?.id)
                 res.json(report)
             } catch (error) {
-                console.log(error)
+               // console.log(error)
                 res.sendStatus(404);
             }
 

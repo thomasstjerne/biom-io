@@ -61,16 +61,19 @@ const getTypeAndValues = (arr, attr) => {
     let allValuesAreNumbers = true;
     let shape = [arr.length]
     if (_.isArray(_.get(arr[0], attr))) {
+        console.log("It is an array "+attr)
         shape.push(_.get(arr[0], attr).length)
     }
    // console.log(attr)
     const values = arr.map(elm => {
         const data = _.get(elm, attr)
+
         if(isNaN(Number(data))){
             allValuesAreNumbers = false;
         }
         if (_.isArray(data)) {
             // haven´t figured out how to create array datatypes in h5wasm so far
+           
             type = "S";
             let str = data.toString()
             if (str.length > length) {
@@ -78,6 +81,7 @@ const getTypeAndValues = (arr, attr) => {
             }
         } else if (typeof data === 'string') {
             type = 'S';
+            
             if (data.length > length) {
                 length = data.length;
             }
@@ -85,10 +89,10 @@ const getTypeAndValues = (arr, attr) => {
             type = 'f'
         } else {
             // console.log('H5 type guesser '+attr+ ' '+ typeof data)
-            if (_.isUndefined(data)) {
+            /* if (_.isUndefined(data)) {
                 type = 'S';
                 length = 1;
-            }
+            } */
         }
         return _.isUndefined(data) ? "" : data;
     })
@@ -98,8 +102,11 @@ const getTypeAndValues = (arr, attr) => {
     if(attr === 'e_value'){
         console.log("e_value allValuesAreNumbers "+ allValuesAreNumbers)
     } */
-    if(allValuesAreNumbers){
-        type = 'f'
+    if(!type){
+        type = "S";
+        length = 1
+    } else if(allValuesAreNumbers){
+         type = 'f'
     }
     let key = attr.split('metadata.')?.[1]
     // Skip columns with strings longer than MAX_FIXED_STRING_LENGTH, and report to the user which columns have been skipped. But what if the sequences are longer?
