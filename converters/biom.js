@@ -48,31 +48,36 @@ export const toBiom = async (otuTableFile, sampleFile, taxaFile, samplesAsColumn
   console.log("Column ID term: "+columnIdTerm)
   const [otuTable, rows, columns] = await streamReader.readOtuTableToSparse(otuTableFile, processFn, columnIdTerm);
   console.log("Finished readOtuTableToSparse")
+  try {
+    const b = await new Promise((resolve, reject) => {
+        try {
+            console.log("Create Biom")
+            const biom = new Biom({
+                id: id || null,
+                comment: getGroupMetaDataAsJsonString(termMapping),   // Biom v1 does not support group metadata where we store field default values. Therefore this is given as a JSON string in the comment field 
+                rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
+                columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),
+                matrix_type: 'sparse',
+                shape: samplesAsColumns ? [taxa.size, samples.size] : [samples.size, taxa.size],
+                data: otuTable
+              })
+              console.log("Biom created")
+              if(!samplesAsColumns){
+                // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
+                biom.transpose()
+              }
+              console.log("Resolve toBiom")
+             resolve(biom);
+        } catch (error) {
+            reject(error)
+        }
+       
+      })
+      return b;
+  } catch (err) {
+    throw err
+  }
   
-  return new Promise((resolve, reject) => {
-    try {
-        console.log("Create Biom")
-        const biom = new Biom({
-            id: id || null,
-            comment: getGroupMetaDataAsJsonString(termMapping),   // Biom v1 does not support group metadata where we store field default values. Therefore this is given as a JSON string in the comment field 
-            rows: rows.map(r => getMetaDataRow(samplesAsColumns ? taxa.get(r) : samples.get(r))), 
-            columns: columns.map(c => getMetaDataRow(samplesAsColumns ? samples.get(c) : taxa.get(c))),
-            matrix_type: 'sparse',
-            shape: samplesAsColumns ? [taxa.size, samples.size] : [samples.size, taxa.size],
-            data: otuTable
-          })
-          console.log("Biom created")
-          if(!samplesAsColumns){
-            // We can read taxa as columns, but we will flip the matrix and always store samples as columns (samples will alwas have a smaller cardinality)
-            biom.transpose()
-          }
-          console.log("Resolve toBiom")
-         resolve(biom);
-    } catch (error) {
-        reject(error)
-    }
-   
-  })
   
 }
 

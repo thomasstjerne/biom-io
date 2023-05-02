@@ -11,6 +11,12 @@ export default [
         defaultRequired: true,
         vocabulary: ["COI", "ITS", "ITS1", "ITS2", "16S", "18S", "23S", "5S"],
         biomGroup: 'observation'
-    }   
+    } ,
+    {
+        name: 'kingdom',
+        description: "The full scientific name of the kingdom in which the taxon is classified.",
+        defaultRequired: false,
+        biomGroup: 'observation'
+    },  
 
 ]

@@ -145,13 +145,14 @@ const q = queue(async (options) => {
                 await writeBiomFormats(biom, id, version, job, updateStatusOnCurrentStep)
             } else if (files.format === 'TSV_2_FILE') {
                 // TODO 
+                
             }
 
         } else if (files.format === 'XLSX') {
             console.log("Its XLSX format")
             job.steps.push({ ...STEPS.convertToBiom, status: 'processing', time: Date.now() })
             runningJobs.set(id, { ...job });
-            const biom = await processWorkBookFromFile(id, files.files[0].name, version, job.mapping)
+            const biom = await processWorkBookFromFile(id, files.files[0].name, version, job.mapping, updateStatusOnCurrentStep)
             job.steps[job.steps.length - 1] = { ...job.steps[job.steps.length - 1], status: 'finished' }
             job.steps.push({ ...STEPS.addReadCounts, status: 'processing', time: Date.now() })
             runningJobs.set(id, { ...job });
@@ -262,19 +263,27 @@ export default (app) => {
             res.sendStatus(404);
         } else {
 
+          //  console.log("Process request 1")
             // this will only find jobs that are being processed -will need
             const job = runningJobs.get(req.params.id);
-
+          //  console.log("Process request 2")
             try {
                 let version = req.params?.version;
                 if (!version) {
+                    
                     version = await getCurrentDatasetVersion(req.params.id);
+                   // console.log("Process request 3")
                 }
                 let report = await getDataset(req.params.id, version);
+              //  console.log("Process request 4")
+
                 if (job) {
                     let data = { ...report, ...job, steps: addPendingSteps(job) };
+                  //  console.log("Process request 5")
+
                     res.json(data);
                 } else {
+                  //  console.log("Process request 6")
 
                     if (report) {
                         res.json(report)

@@ -151,7 +151,7 @@ const mapRecord = record => {
 }
 
 // converts an otu table with sample and taxon metada files to BIOM format
-export const toBiom = async (data, termMapping) => {
+export const toBiom = async (data, termMapping, processFn = (progress, total, message, summary) => {}) => {
 
   return new Promise((resolve, reject) => {
     try {
@@ -164,8 +164,11 @@ export const toBiom = async (data, termMapping) => {
       const taxaMap = getMapFromMatrix(taxa.data, termMapping.taxa, true)
       const sparseData = [];
       let columns = otuTable.data[0].slice(1);
+      processFn(columns.length, columns.length, 'Reading OTU table from spreadsheet', {sampleCount: columns.length});
+
       let rows = [];
       console.log(otuTable.data.length)
+
       otuTable.data.slice(1).forEach((row, rowIndex) => {
         if(!!row[0]){
           row.slice(1).forEach((val, index) => {
@@ -176,6 +179,8 @@ export const toBiom = async (data, termMapping) => {
           rows.push(row[0])
         }  
       })
+      processFn(rows.length, rows.length, 'Reading OTU table  from spreadsheet', {taxonCount: rows.length});
+
       console.log(`Samples in metadata: ${samples.data.length} in OTU table: ${columns.length}`)
       console.log(`Taxa in metadata: ${taxa.data.length} in OTU table: ${rows.length}`)
       const biom = new Biom({
@@ -194,7 +199,7 @@ export const toBiom = async (data, termMapping) => {
 
 }
 
-export const processWorkBookFromFile = async (id, fileName, version, termMapping) => {
+export const processWorkBookFromFile = async (id, fileName, version, termMapping, processFn = (progress, total, message, summary) => {}) => {
   return new Promise((resolve, reject) => {
     try {
       const stream = fs.createReadStream(`${config.dataStorage}${id}/${version}/original/${fileName}`);
@@ -219,7 +224,7 @@ export const processWorkBookFromFile = async (id, fileName, version, termMapping
 
         const data = workbook.SheetNames.map(n => ({name: n, data: xlsx.utils.sheet_to_json(workbook.Sheets[n], {header: 1})}));
         const mappedData = determineFileNames(data, termMapping)
-        const biom = await toBiom(mappedData, termMapping)
+        const biom = await toBiom(mappedData, termMapping, processFn)
         resolve(biom)
         }
       });
