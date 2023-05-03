@@ -177,6 +177,10 @@ export const toBiom = async (data, termMapping, processFn = (progress, total, me
             }
           })
           rows.push(row[0])
+          if((rowIndex +1 % 100) === 0){
+            processFn(rowIndex, rows.length, 'Reading OTU table  from spreadsheet', {taxonCount: rows.length});
+
+          }
         }  
       })
       processFn(rows.length, rows.length, 'Reading OTU table  from spreadsheet', {taxonCount: rows.length});
