@@ -25,10 +25,11 @@ export const addReadCounts = async (biom, processFn = (progress, total, message,
             const length =  biom.columns.length
             processFn(0, length)
             const readCounts = biom.columns.map((c, idx) => {
-                getReadCount(biom, c.id)
+                const readCount = getReadCount(biom, c.id)
                 if((idx +1 )% 10 === 0){
                     processFn(idx +1, length)
                 }
+                return readCount;
             });
             biom.addMetadata({dimension: 'columns', attribute: 'readCount', values: readCounts}) 
             resolve(biom) 

@@ -2,7 +2,53 @@ import fs from 'fs'
 import config from '../config.js'
 import {Biom} from 'biojs-io-biom';
 import child_process from 'child_process';
+import {spawn} from 'child_process';
+
 import parse from 'csv-parse';
+// import path from 'path';
+import json from 'big-json';
+import AdmZip from "adm-zip";
+
+
+
+
+export const parseBigJson = async (file,  processFn = (progress, total, message, summary) => {},) => {
+ 
+  const exists = await fileAtPathExists(file)
+    if(!exists){
+      throw `Not found: ${file}`
+      }
+    const {size} = await fs.promises.stat(file);
+    let progress = 0;
+    let nextPct = 5; // for every 5 pct parsed, update progress
+  return new Promise((resolve, reject) => {
+    try {
+      const readStream = fs.createReadStream(file);
+      const parseStream = json.createParseStream();
+      
+      parseStream.on('data', function(pojo) {
+          processFn(size, size)
+          resolve(pojo)
+      });
+
+      readStream.on('data', (buffer) => {
+        progress += buffer.length;
+        const progressPct = Math.round(progress/ size*100)
+        if(progressPct > nextPct){
+          processFn(progress, size)
+          nextPct +=5 ;
+        }
+    })
+      
+      readStream.pipe(parseStream);
+    } catch (error) {
+      reject(error)
+    }
+    
+
+  })
+  
+}
 
 
 export const getCurrentDatasetVersion = async id => {
@@ -90,13 +136,15 @@ export const getMetadata = async (id, version) => {
     
 }
 
-export const readBiom = async (id, version) => {
+export const readBiom = async (id, version, processFn = (progress, total, message, summary) => {},) => {
     try {
         let files = await fs.promises.readdir(`${config.dataStorage}${id}/${version}`)     
          if(!!files.find(f => f === 'data.biom.json')){
-           // Todo use JSONstream as the data could be large
-            let data = await fs.promises.readFile(`${config.dataStorage}${id}/${version}/data.biom.json`, 'utf8') //writeFile(`${config.dataStorage}${id}/${version}/processing.json`, JSON.stringify(json, null, 2));
-            const biom = new Biom(JSON.parse(data))
+            /* let data = await fs.promises.readFile(`${config.dataStorage}${id}/${version}/data.biom.json`, 'utf8') //writeFile(`${config.dataStorage}${id}/${version}/processing.json`, JSON.stringify(json, null, 2));
+            const biom = new Biom(JSON.parse(data)) */
+
+            let data = await parseBigJson(`${config.dataStorage}${id}/${version}/data.biom.json`, processFn) //writeFile(`${config.dataStorage}${id}/${version}/processing.json`, JSON.stringify(json, null, 2));
+            const biom = new Biom(data)
             return biom;
          } else {
             return null
@@ -125,6 +173,20 @@ export const zipDwcArchive = (id, version) => {
       );
     });
   };
+
+/*   export const zipDwcArchive = async (id, version) => {
+    return new Promise((resolve, reject) => {
+      const zip = spawn('zip', ['-r', `${config.dataStorage}${id}/${version}/archive.zip`, `*`], {
+        cwd: `${config.dataStorage}${id}/${version}/archive`,
+      })
+      zip.on('exit', () => {
+        resolve()
+      })
+      zip.on('error', (e) => {
+        reject(e)
+      })
+    })
+  }; */
 
   export const rsyncToPublicAccess = (id, version) => {
     return new Promise((resolve, reject) => {
@@ -212,6 +274,17 @@ export const deleteFile = async (id, version, fileName) => {
 export const fileExists = async (id, version, fileName) => {
   return new Promise((resolve, reject) => {
   fs.access(`${config.dataStorage}${id}/${version}/${fileName}`, (error) => {
+    if (error) {
+      resolve(false)
+    }
+    resolve(true)
+  });
+})
+}
+
+export const fileAtPathExists = async (file) => {
+  return new Promise((resolve, reject) => {
+  fs.access(file, (error) => {
     if (error) {
       resolve(false)
     }

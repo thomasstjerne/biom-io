@@ -2,6 +2,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { fork } from 'child_process';
 import STEPS from '../enum/processingSteps.js'
+import DWCSTEPS from '../enum/dwcSteps.js'
 import config from '../config.js'
 import runningJobs from './runningJobs.js';
 import { uploadedFilesAndTypes, getMimeFromPath, getFileSize, unzip } from '../validation/files.js'
@@ -129,4 +130,55 @@ export const processDataset = (id, version, job) => {
         })
     })
 
+}
+
+export const createDwc = (id, version, job) => {
+
+    return new Promise(async (resolve, reject) => {
+        const work = fork(__dirname + '/dwcworker.js', [id, version]);
+
+
+        work.on('message', (message) => {
+            if(message?.type === 'beginStep' && !!message?.payload){
+                console.log("BEGIN STEP "+message?.payload)
+                
+                job.steps.push({ ...DWCSTEPS[message?.payload], status: 'processing', time: Date.now() })
+                runningJobs.set(id, { ...job });
+            }
+
+            if(message?.type === 'stepFinished' && message?.payload){
+                const finishedJob = job.steps.find(s => s.name === message?.payload);
+                finishedJob.status = 'finished'
+               
+                runningJobs.set(id, { ...job });
+               
+            }
+
+            if(message?.type === 'finishedJobSuccesssFully'){
+                resolve()
+            }
+            if(message?.type === 'finishedJobWithError'){
+                reject(message?.payload)
+            }
+
+            // TODO: progress for DwC conversion
+            if(message?.type === 'updateStatusOnCurrentStep' && message?.payload){
+                let step = job.steps[job.steps.length - 1];
+              //  console.log(job.steps)
+                // step.message = message || step.message;
+                if ( message?.payload?.message) {
+                    step.subTask = message?.payload?.message
+                }
+                step.progress = message?.payload?.progress ?? step.progress;
+                step.total = message?.payload?.total ?? step.total;
+                if (message?.payload?.summary) {
+                    job.summary = { ...job.summary, ...message?.payload?.summary }
+                }
+                runningJobs.set(id, { ...job });
+            } 
+
+        })
+
+
+    })
 }

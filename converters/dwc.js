@@ -45,74 +45,106 @@ const getDefaultTermsForMetaXml = (biomData, dnaTerms, occTerms) => {
 }
 
 
-export const biomToDwc = async (biomData, termMapping = { taxa: {}, samples: {}}, path) => {
-  try{
+export const biomToDwc = async (biomData, termMapping = { taxa: {}, samples: {}}, path, processFn = (progress, total, message, summary) => {}) => {
 
-    if (!fs.existsSync(`${path}/archive`)){
-     await fs.promises.mkdir(`${path}/archive`, { recursive: true });
-  }
-    const reverseTaxonTerms = util.objectSwap(termMapping.taxa)
-    const reverseSampleTerms = util.objectSwap(termMapping.samples)
-    const taxonTerm = key => _.get(termMapping, `taxa.${key}`, key);
-    const sampleTerm = key =>  _.get(termMapping, `samples.${key}`, key);
-    const reverseSampleTerm = key => _.get(reverseSampleTerms, `${key}`, key);
-    const reverseTaxonTerm = key => _.get(reverseTaxonTerms, `${key}`, key);
-    const dnaTerms = await util.dwcTerms('dna_derived_data');
-    const occTerms = await util.dwcTerms('dwc_occurrence');
-    const taxonHeaders = Object.keys(_.get(biomData, 'rows[0].metadata'));
-   // console.log(taxonHeaders)
-    const sampleHeaders = Object.keys(_.get(biomData, 'columns[0].metadata'));
+  return new Promise(async (resolve, reject) => {
+    try{
 
-    const defaults = getDefaultTermsForMetaXml(biomData, dnaTerms, occTerms)
-
-    const relevantOccTerms  = [...sampleHeaders.filter(key => occTerms.has(sampleTerm(key)) && !defaults.keySet.has(key)).map(key => occTerms.get(sampleTerm(key))),
-        ...taxonHeaders.filter(key => occTerms.has(taxonTerm(key))  && !defaults.keySet.has(key)).map(key => occTerms.get(taxonTerm(key))),
-        ...defaults.occDefaultTerms
-      ];
-    const relevantDnaTerms = [...sampleHeaders.filter(key => dnaTerms.has(sampleTerm(key)) && !defaults.keySet.has(key)).map(key => dnaTerms.get(sampleTerm(key))),
-        ...taxonHeaders.filter(key => dnaTerms.has(taxonTerm(key)) && !defaults.keySet.has(key)).map(key => dnaTerms.get(taxonTerm(key))),
-        ...defaults.dnaDefaultTerms
-      ];
-    
-   
-    //  console.log("Relevant DNA terms: "+ relevantDnaTerms.map(k => k.name))
-   //   console.log("Relevant OCC terms: "+ relevantOccTerms.map(k => k.name))
-    await writeMetaXml([...relevantOccTerms, occTerms.get('sampleSizeValue'), occTerms.get('sampleSizeUnit'), occTerms.get('organismQuantity'), occTerms.get('organismQuantityType'), occTerms.get('basisOfRecord'), occTerms.get('eventID')],relevantDnaTerms, path)
-     
-    const occStream = fs.createWriteStream(`${path}/archive/occurrence.txt`, {
-        flags: "a",
-      });
-    const dnaStream = fs.createWriteStream(`${path}/archive/dna.txt`, {
-        flags: "a",
-      });
-     
-    const getDataForTermfromSample = (sample, terms) => terms.filter(term => reverseSampleTerm(term.name) in sample.metadata).map(term => sample.metadata[reverseSampleTerm(term.name)] || "").join("\t");
-    const getDataForTermFromTaxon = (taxon, terms) => terms.filter(term => reverseTaxonTerm(term.name) in taxon.metadata).map(term => taxon.metadata[reverseTaxonTerm(term.name)] || "").join("\t"); 
-    
-      biomData.columns.forEach((c) => {
-         const rowData = biomData.getDataColumn(c.id);
-         rowData.forEach((r, i) => {
-            if(Number(r) > 0){
-                // row = taxon, column = sample 
-                const row = biomData.rows[i];
-                const occurrenceId = `${c.id}:${row.id}`;
-                const sampleId = c.id;
-
-                let occSampleData = getDataForTermfromSample(c, relevantOccTerms);         
-                let occTaxonData = getDataForTermFromTaxon(row, relevantOccTerms);
-                
-                occStream.write(`${occurrenceId}\t${occSampleData ? `${occSampleData}\t` : ""}${occTaxonData ? `${occTaxonData}\t` : ""}${_.get(c, 'metadata.readCount','')}\t${DEFAULT_UNIT}\t${r}\t${DEFAULT_UNIT}\t${BASIS_OF_RECORD}\t${sampleId}\n`);
-                
-                let dnaSampleData = getDataForTermfromSample(c, relevantDnaTerms);         
-                let dnaTaxonData = getDataForTermFromTaxon(row, relevantDnaTerms);
-                dnaStream.write(`${occurrenceId}\t${dnaSampleData ? `${dnaSampleData}\t` : ""}${dnaTaxonData ? dnaTaxonData : ""}\n`);
-            }
-         })
-      })
-    } catch (error){
-      console.log(error)
-      throw error
+      if (!fs.existsSync(`${path}/archive`)){
+       await fs.promises.mkdir(`${path}/archive`, { recursive: true });
     }
+      const reverseTaxonTerms = util.objectSwap(termMapping.taxa)
+      const reverseSampleTerms = util.objectSwap(termMapping.samples)
+      const taxonTerm = key => _.get(termMapping, `taxa.${key}`, key);
+      const sampleTerm = key =>  _.get(termMapping, `samples.${key}`, key);
+      const reverseSampleTerm = key => _.get(reverseSampleTerms, `${key}`, key);
+      const reverseTaxonTerm = key => _.get(reverseTaxonTerms, `${key}`, key);
+      const dnaTerms = await util.dwcTerms('dna_derived_data');
+      const occTerms = await util.dwcTerms('dwc_occurrence');
+      const taxonHeaders = Object.keys(_.get(biomData, 'rows[0].metadata'));
+     // console.log(taxonHeaders)
+      const sampleHeaders = Object.keys(_.get(biomData, 'columns[0].metadata'));
+  
+      const defaults = getDefaultTermsForMetaXml(biomData, dnaTerms, occTerms)
+  
+      const relevantOccTerms  = [...sampleHeaders.filter(key => occTerms.has(sampleTerm(key)) && !defaults.keySet.has(key)).map(key => occTerms.get(sampleTerm(key))),
+          ...taxonHeaders.filter(key => occTerms.has(taxonTerm(key))  && !defaults.keySet.has(key)).map(key => occTerms.get(taxonTerm(key))),
+          ...defaults.occDefaultTerms
+        ];
+      const relevantDnaTerms = [...sampleHeaders.filter(key => dnaTerms.has(sampleTerm(key)) && !defaults.keySet.has(key)).map(key => dnaTerms.get(sampleTerm(key))),
+          ...taxonHeaders.filter(key => dnaTerms.has(taxonTerm(key)) && !defaults.keySet.has(key)).map(key => dnaTerms.get(taxonTerm(key))),
+          ...defaults.dnaDefaultTerms
+        ];
+      
+     
+      //  console.log("Relevant DNA terms: "+ relevantDnaTerms.map(k => k.name))
+     //   console.log("Relevant OCC terms: "+ relevantOccTerms.map(k => k.name))
+      await writeMetaXml([...relevantOccTerms, occTerms.get('sampleSizeValue'), occTerms.get('sampleSizeUnit'), occTerms.get('organismQuantity'), occTerms.get('organismQuantityType'), occTerms.get('basisOfRecord'), occTerms.get('eventID')],relevantDnaTerms, path)
+       
+      const occStream = fs.createWriteStream(`${path}/archive/occurrence.txt`, {
+          flags: "a",
+        });
+      const dnaStream = fs.createWriteStream(`${path}/archive/dna.txt`, {
+          flags: "a",
+        });
+      let occStreamClosed = false;
+      let dnaStreamClosed = false; 
+
+      occStream.on('finish', () => {
+        console.log("OCC stream finished")
+        occStreamClosed = true;
+        if(dnaStreamClosed){
+          resolve()
+        }
+      })
+      dnaStream.on('finish', () => {
+        console.log("DNA stream finished")
+
+        dnaStreamClosed = true;
+        if(occStreamClosed){
+          resolve()
+        }
+      })
+      occStream.on('error', (err) => {
+        reject(err)
+      })
+      dnaStream.on('error', (err) => {
+        reject(err)
+      })
+
+      const getDataForTermfromSample = (sample, terms) => terms.filter(term => reverseSampleTerm(term.name) in sample.metadata).map(term => sample.metadata[reverseSampleTerm(term.name)] || "").join("\t");
+      const getDataForTermFromTaxon = (taxon, terms) => terms.filter(term => reverseTaxonTerm(term.name) in taxon.metadata).map(term => taxon.metadata[reverseTaxonTerm(term.name)] || "").join("\t"); 
+        biomData.columns.forEach((c, cidx) => {
+           const rowData = biomData.getDataColumn(c.id);
+           rowData.forEach((r, i) => {
+              if(Number(r) > 0){
+                  // row = taxon, column = sample 
+                  const row = biomData.rows[i];
+                  const occurrenceId = `${c.id}:${row.id}`;
+                  const sampleId = c.id;
+  
+                  let occSampleData = getDataForTermfromSample(c, relevantOccTerms);         
+                  let occTaxonData = getDataForTermFromTaxon(row, relevantOccTerms);
+                  
+                  occStream.write(`${occurrenceId}\t${occSampleData ? `${occSampleData}\t` : ""}${occTaxonData ? `${occTaxonData}\t` : ""}${_.get(c, 'metadata.readCount','')}\t${DEFAULT_UNIT}\t${r}\t${DEFAULT_UNIT}\t${BASIS_OF_RECORD}\t${sampleId}\n`);
+                  
+                  let dnaSampleData = getDataForTermfromSample(c, relevantDnaTerms);         
+                  let dnaTaxonData = getDataForTermFromTaxon(row, relevantDnaTerms);
+                  dnaStream.write(`${occurrenceId}\t${dnaSampleData ? `${dnaSampleData}\t` : ""}${dnaTaxonData ? dnaTaxonData : ""}\n`);
+              }
+           })
+           processFn(cidx, biomData.columns.length, 'Writing DWC Ocurrences and DNA sequences')
+  
+        })
+        occStream.close()
+        dnaStream.close()
+
+      } catch (error){
+        console.log(error)
+        reject(error)
+      }
+  })
+
 }
 
 

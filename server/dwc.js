@@ -5,10 +5,13 @@ import {getMimeFromPath, getFileSize} from '../validation/files.js'
 import config from '../config.js'
 import auth from './Auth/auth.js';
 import queue from 'async/queue.js';
+import DWCSTEPS from '../enum/dwcSteps.js'
+import runningJobs from '../workers/runningJobs.js';
+import {createDwc} from '../workers/supervisor.js'
 
-const runningJobs = new Map();
+//const runningJobs = new Map();
 
-const STEPS = {
+/* const STEPS = {
     "readBiom": {
         "name": "readBiom",
         "status": "pending",
@@ -28,7 +31,7 @@ const STEPS = {
         "messagePending": "Zip files"
       },
 
-}
+} */
 
  const q = queue(async (options) => {
     const {id, version} = options;
@@ -38,35 +41,31 @@ const STEPS = {
     try {
         job.version = version;
         job.steps = job.steps.filter(j => j.status !== 'queued');
-        job.steps.push({...STEPS.readBiom, status: 'processing', time: Date.now() })
+
+        await createDwc(id, version, job)
+
+
+/* 
+        job.steps.push({...DWCSTEPS.readBiom, status: 'processing', time: Date.now() })
         runningJobs.set(id, job);
         console.log("Read Biom")
 
         const biom = await readBiom(id, version)
         job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
-        job.steps.push({...STEPS.writeDwc, status: 'processing', time: Date.now() })
+        job.steps.push({...DWCSTEPS.writeDwc, status: 'processing', time: Date.now() })
 
         runningJobs.set(id, job);
         console.log("Write Dwc")
         await biomToDwc(biom, undefined, `${config.dataStorage}${id}/${version}`)
         console.log("Dwc written")
         job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
-        job.steps.push({...STEPS.zipArchive, status: 'processing', time: Date.now() })
+        job.steps.push({...DWCSTEPS.zipArchive, status: 'processing', time: Date.now() })
         runningJobs.set(id, job);
         await zipDwcArchive(id, version)
         console.log("Archive zipped")
-        job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'}
+        job.steps[job.steps.length -1] = {...job.steps[job.steps.length -1], status: 'finished'} */
 
-       /* job.steps.push({ status: 'processing', message: 'Copying archive to public URI', time: Date.now() })
-        runningJobs.set(id, job);
-         console.log("Archive copied to public access url")
-        await rsyncToPublicAccess(id, version)
-        job.steps.push({ status: 'processing', message: 'Registering dataset in GBIF', time: Date.now() })
-        runningJobs.set(id, job);
-        const gbifDatasetKey = await registerDatasetInGBIF(id, config.gbifUsername, config.gbifPassword)
-        job.gbifDatasetKey = gbifDatasetKey;
-        runningJobs.set(id, job);
-        console.log("Dataset registered in GBIF, crawl triggered") */
+
     } catch (error) {
         console.log(error)
         
@@ -88,7 +87,8 @@ const pushJob = async (id, version) => {
                 //runningJobs.set(id, {...runningJobs.get(id), status: 'failed'} )
                // throw error
             } else {
-                let job = runningJobs.get(id);
+                try {
+                    let job = runningJobs.get(id);
                 job.steps.push({ status: 'finished', time: Date.now() })
                 let report = await getProcessingReport(id, version);
                 let file = {
@@ -101,6 +101,10 @@ const pushJob = async (id, version) => {
                 report.dwc = job;
                 await writeProcessingReport(id, version, report)
                 runningJobs.delete(id)
+                } catch (error) {
+                    console.log(error)
+                }
+                
             }
         })
     } catch (error) {
@@ -121,8 +125,8 @@ const processDwc = async function (req, res) {
                 version = await getCurrentDatasetVersion(req.params.id)
             } 
             console.log("Version "+version)
-           
-                if(!runningJobs.has(req.params.id, version)){
+                // Make sure a job is not already running
+                if(!runningJobs.has(req.params.id)){
                     console.log("Push job")
                     pushJob(req.params.id, version );
                     res.sendStatus(201)
@@ -189,8 +193,7 @@ const processDwc = async function (req, res) {
   const addPendingSteps = job => {
     const steps_ = job.steps;
     
-    //console.log(Object.keys(STEPS).filter(s =>  !job.steps.map(a => a?.name).includes(s)).map(k => STEPS[k]));
-    return [...steps_, ...Object.keys(STEPS).filter(s => !steps_.map(a => a?.name).includes(s)).map(k => STEPS[k])]
+    return [...steps_, ...Object.keys(DWCSTEPS).filter(s => !steps_.map(a => a?.name).includes(s)).map(k => DWCSTEPS[k])]
 }
 
 export default  (app) => {

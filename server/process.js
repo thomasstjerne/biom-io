@@ -91,6 +91,7 @@ export default (app) => {
             res.sendStatus(404);
         } else {
             try {
+                // Make sure a job is not already running
                 if (!runningJobs.has(req.params.id)) {
                     pushJob(req.params.id);
                     res.sendStatus(201)
